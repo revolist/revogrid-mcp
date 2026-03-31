@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@revogrid-mcp/content-model": ["packages/content-model/src/index.ts"],
+      "@revogrid-mcp/content-model/*": ["packages/content-model/src/*"],
+      "@revogrid-mcp/ingestion": ["packages/ingestion/src/index.ts"],
+      "@revogrid-mcp/ingestion/*": ["packages/ingestion/src/*"],
+      "@revogrid-mcp/shared": ["packages/shared/src/index.ts"],
+      "@revogrid-mcp/shared/*": ["packages/shared/src/*"]
+    }
+  }
+}

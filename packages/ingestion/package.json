@@ -1,0 +1,17 @@
+{
+  "name": "@revogrid-mcp/ingestion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@revogrid-mcp/content-model": "workspace:*",
+    "@revogrid-mcp/shared": "workspace:*",
+    "zod": "^3.24.2"
+  }
+}

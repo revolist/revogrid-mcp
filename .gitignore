@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.DS_Store
+coverage
+*.tsbuildinfo
+apps/server/test/*.js
+apps/server/test/*.js.map
+apps/server/test/*.d.ts
+apps/server/test/*.d.ts.map
+data/*.json
+!data/.gitkeep
