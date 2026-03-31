@@ -1,0 +1,6 @@
+[submodule "external/revogrid"]
+	path = external/revogrid
+	url = https://github.com/revolist/revogrid.git
+[submodule "external/revogrid-pro"]
+	path = external/revogrid-pro
+	url = https://github.com/revolist/revogrid-pro.git

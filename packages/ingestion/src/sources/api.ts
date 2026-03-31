@@ -1,28 +1,13 @@
-import { existsSync } from 'node:fs';
+import { collectSourceFiles, resolveSourceRoot } from './_shared.js';
 
-import { resolveFromRepo } from '@revogrid-mcp/shared';
+export async function getApiSources() {
+  const revogridRoot = await resolveSourceRoot(import.meta.url, 'revogrid');
+  const revogridProRoot = await resolveSourceRoot(import.meta.url, 'revogrid-pro');
 
-import type { SourceDescriptor } from './docs.js';
+  const [publicApi, proApi] = await Promise.all([
+    collectSourceFiles(revogridRoot, 'api', ['docs/guide/types', 'src/types']),
+    collectSourceFiles(revogridProRoot, 'api', ['src/content/docs/api', 'release/plugins'])
+  ]);
 
-export function getApiSources(): SourceDescriptor[] {
-  // TODO(revogrid-real-ingestion): extract API symbols and event signatures from these type files to back symbol-aware retrieval.
-  const candidates = [
-    {
-      name: 'interfaces',
-      path: resolveFromRepo(import.meta.url, 'revogrid/src/types/interfaces.ts')
-    },
-    {
-      name: 'selection-types',
-      path: resolveFromRepo(import.meta.url, 'revogrid/src/types/selection.ts')
-    },
-    {
-      name: 'plugin-types',
-      path: resolveFromRepo(import.meta.url, 'revogrid/src/types/plugin.types.ts')
-    }
-  ];
-
-  return candidates.map((candidate) => ({
-    ...candidate,
-    exists: existsSync(candidate.path)
-  }));
+  return [...publicApi, ...proApi];
 }

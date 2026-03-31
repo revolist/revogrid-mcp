@@ -1,6 +1,7 @@
-import { buildSeedDataset } from '../fixtures/seedData.js';
+import type { SeedDataset } from '@revogrid-mcp/content-model';
 
-export function ingestFullSeedContent() {
-  // TODO(revogrid-real-ingestion): merge parsed Pro docs and demos from ../revogrid/docs/pro and ../revogrid-pro/src into the normalized chunk model.
-  return buildSeedDataset();
+import { buildCatalogDataset } from './buildCatalog.js';
+
+export async function ingestFullContent(): Promise<SeedDataset> {
+  return buildCatalogDataset();
 }

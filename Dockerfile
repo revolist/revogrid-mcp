@@ -11,4 +11,4 @@ RUN pnpm build
 
 EXPOSE 8787
 
-CMD ["pnpm", "--filter", "@revogrid-mcp/server", "start"]
+CMD ["pnpm", "start"]

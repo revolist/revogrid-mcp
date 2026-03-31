@@ -1,10 +1,9 @@
 import type { SeedDataset } from '@revogrid-mcp/content-model';
 
-import { buildSeedDataset } from '../fixtures/seedData.js';
+import { buildCatalogDataset } from './buildCatalog.js';
 
-export function ingestPublicSeedContent(): SeedDataset {
-  // TODO(revogrid-real-ingestion): replace seeded chunks with parsed public docs from ../revogrid/docs and public examples from ../revogrid/packages/*/demo.
-  const dataset = buildSeedDataset();
+export async function ingestPublicContent(): Promise<SeedDataset> {
+  const dataset = await buildCatalogDataset();
 
   return {
     ...dataset,

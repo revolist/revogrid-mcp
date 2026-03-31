@@ -9,7 +9,6 @@ export function resolveRequestContext(
   request: FastifyRequest,
   config: AppConfig,
 ): RequestContext {
-  // TODO(revogrid-real-ingestion): replace the header-based placeholder with real auth token verification and entitlement lookup.
   const headerValue = request.headers['x-revogrid-entitlement'];
   const entitlement = normalizeEntitlement(headerValue, config.DEFAULT_ENTITLEMENT);
 

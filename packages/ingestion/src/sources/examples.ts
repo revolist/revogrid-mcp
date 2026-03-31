@@ -1,28 +1,32 @@
-import { existsSync } from 'node:fs';
+import { collectSourceFiles, resolveSourceRoot } from './_shared.js';
 
-import { resolveFromRepo } from '@revogrid-mcp/shared';
+export async function getExampleSources() {
+  const revogridRoot = await resolveSourceRoot(import.meta.url, 'revogrid');
+  const revogridProRoot = await resolveSourceRoot(import.meta.url, 'revogrid-pro');
 
-import type { SourceDescriptor } from './docs.js';
+  const [publicExamples, proDemoContent, proComponentExamples] = await Promise.all([
+    collectSourceFiles(revogridRoot, 'examples', ['docs/demo', 'packages/react/demo', 'packages/vue3/demo']),
+    collectSourceFiles(revogridProRoot, 'examples', ['src/content/demo']),
+    collectSourceFiles(revogridProRoot, 'examples', ['src/components'])
+  ]);
 
-export function getExampleSources(): SourceDescriptor[] {
-  // TODO(revogrid-real-ingestion): parse runnable example metadata from these framework demo folders and map them to example/live-demo chunks.
-  const candidates = [
-    {
-      name: 'react-demo',
-      path: resolveFromRepo(import.meta.url, 'revogrid/packages/react/demo')
-    },
-    {
-      name: 'vue-demo',
-      path: resolveFromRepo(import.meta.url, 'revogrid/packages/vue3/demo')
-    },
-    {
-      name: 'pro-components',
-      path: resolveFromRepo(import.meta.url, 'revogrid-pro/src/components')
-    }
+  return [
+    ...publicExamples,
+    ...proDemoContent,
+    ...proComponentExamples.filter(isExampleComponentSource)
   ];
+}
 
-  return candidates.map((candidate) => ({
-    ...candidate,
-    exists: existsSync(candidate.path)
-  }));
+function isExampleComponentSource(source: { relativePath: string }): boolean {
+  const relativePath = source.relativePath.replace(/\\/g, '/');
+
+  if (
+    relativePath.startsWith('src/components/overrides/') ||
+    relativePath.startsWith('src/components/composables/') ||
+    relativePath.startsWith('src/components/sys-data/')
+  ) {
+    return false;
+  }
+
+  return true;
 }

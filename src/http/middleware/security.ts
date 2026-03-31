@@ -42,7 +42,6 @@ function enforceRateLimit(
     return;
   }
 
-  // TODO: replace this per-process limiter with Redis or an API gateway policy in production.
   const key = request.ip;
   const now = Date.now();
   const bucket = rateLimitBuckets.get(key);

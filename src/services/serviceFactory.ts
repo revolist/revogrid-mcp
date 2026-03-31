@@ -1,4 +1,4 @@
-import { buildSeedDataset } from '@revogrid-mcp/ingestion';
+import { buildCatalogDataset } from '@revogrid-mcp/ingestion';
 
 import type { AppConfig } from '../config/env.js';
 import type { ContentRepository } from '../repositories/contentRepository.js';
@@ -29,5 +29,5 @@ async function createContentRepository(config: AppConfig): Promise<ContentReposi
     return new PostgresContentRepository(new Pool({ connectionString: config.DATABASE_URL }), config.PGVECTOR_TABLE);
   }
 
-  return new InMemoryContentRepository(buildSeedDataset());
+  return new InMemoryContentRepository(await buildCatalogDataset());
 }

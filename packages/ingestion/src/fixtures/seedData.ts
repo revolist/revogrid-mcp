@@ -304,7 +304,6 @@ const migrations: MigrationNoteRecord[] = [
 ];
 
 export function buildSeedDataset(): SeedDataset {
-  // TODO(revogrid-real-ingestion): keep this fixture set only as a local fallback once real ingestion is wired into the pipelines.
   return {
     chunks,
     versions,

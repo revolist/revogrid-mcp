@@ -1,24 +1,11 @@
-import { existsSync } from 'node:fs';
+import { collectSourceFiles, resolveSourceRoot } from './_shared.js';
 
-import { resolveFromRepo } from '@revogrid-mcp/shared';
+export async function getChangelogSources() {
+  const revogridRoot = await resolveSourceRoot(import.meta.url, 'revogrid');
 
-import type { SourceDescriptor } from './docs.js';
-
-export function getChangelogSources(): SourceDescriptor[] {
-  // TODO(revogrid-real-ingestion): parse release notes and migration entries from these sources into changelog and migration chunks.
-  const candidates = [
-    {
-      name: 'revogrid-release-script',
-      path: resolveFromRepo(import.meta.url, 'revogrid/docs/release.mjs')
-    },
-    {
-      name: 'revogrid-blog',
-      path: resolveFromRepo(import.meta.url, 'revogrid/docs/blog')
-    }
-  ];
-
-  return candidates.map((candidate) => ({
-    ...candidate,
-    exists: existsSync(candidate.path)
-  }));
+  return collectSourceFiles(revogridRoot, 'changelog', [
+    'docs/guide/migrations',
+    'docs/blog',
+    'docs/release.mjs'
+  ]);
 }

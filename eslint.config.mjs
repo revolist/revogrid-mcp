@@ -8,9 +8,10 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       '**/.turbo/**',
+      'external/**',
       'data/**/*.json',
       '**/*.d.ts',
-      'apps/server/test/**',
+      'test/**',
       'scripts/**/*.ts',
       'eslint.config.mjs',
       'vitest.config.ts'
@@ -26,7 +27,7 @@ export default tseslint.config(
             '*.ts',
             '*.mjs',
             'scripts/*.ts',
-            'apps/server/test/*.ts'
+            'test/*.ts'
           ]
         },
         tsconfigRootDir: import.meta.dirname
