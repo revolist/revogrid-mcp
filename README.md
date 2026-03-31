@@ -2,6 +2,25 @@
 
 Hosted Streamable HTTP MCP server for version-aware RevoGrid retrieval. The server is read-only in v1 and focuses on structured docs, examples, feature availability, migration notes, and API symbols.
 
+The goal is to make AI coding tools reliably useful with RevoGrid. Instead of guessing from stale training data, the agent can query:
+
+- current RevoGrid docs and examples
+- migration guidance between versions
+- feature availability and Pro gating
+- instruction-rich API chunks derived from RevoGrid TypeScript types
+
+## Why use it with AI agents
+
+This MCP is designed for tools like Codex, Cursor, Claude Code, and VS Code MCP clients.
+
+It helps agents:
+
+- find the right RevoGrid doc or demo for a task
+- distinguish Core vs Pro capabilities before suggesting code
+- ground answers in real RevoGrid types instead of hand-wavy guesses
+- use version-aware migration notes when upgrading code
+- pull working examples instead of inventing component setup
+
 ## 10-minute quickstart
 
 These steps work whether `revogrid-mcp` is the main checkout or a submodule inside a larger workspace.
@@ -72,8 +91,82 @@ Default local base URL: `http://localhost:8787`
   - examples and demo sources
   - migration/changelog pages
   - public and Pro API/type sources
+- Instruction-rich API chunks generated from RevoGrid TypeScript definitions
 - Deterministic fallback embeddings for local development
 - Postgres + pgvector persistence for catalog chunks and metadata
+
+## Install in AI clients
+
+Once the server is running locally, use `http://localhost:8787/mcp`.
+
+### Claude Code
+
+```bash
+claude mcp add --transport http revogrid http://localhost:8787/mcp
+```
+
+### Codex
+
+```bash
+codex mcp add revogrid --url http://localhost:8787/mcp
+```
+
+### Cursor
+
+Open MCP settings and add this to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "RevoGrid": {
+      "url": "http://localhost:8787/mcp",
+      "type": "http"
+    }
+  }
+}
+```
+
+### VS Code
+
+Open `MCP: Add Server...` and choose a remote HTTP MCP server, or add this to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "RevoGrid MCP": {
+      "url": "http://localhost:8787/mcp",
+      "type": "http"
+    }
+  },
+  "inputs": []
+}
+```
+
+## Good prompts for agents
+
+These work well in Codex, Cursor, Claude Code, or other MCP-capable clients.
+
+### Setup and examples
+
+- `Create a React RevoGrid with editable cells. Use the best matching RevoGrid examples and docs.`
+- `Find the best RevoGrid example for a custom column type and implement it in Vue.`
+- `Show me the getting started resources for Angular RevoGrid.`
+
+### Feature checks
+
+- `Does RevoGrid support beforeedit? Show the relevant docs and type information.`
+- `Does pivot exist in this version, and is it Core or Pro?`
+- `What is the best public fallback for pivot if Pro is unavailable?`
+
+### Migration work
+
+- `I am upgrading RevoGrid from 4.x to 5.x. What breaking changes matter for editing and event names?`
+- `Find renamed symbols between RevoGrid 4.x and 5.x.`
+
+### Type-guided coding
+
+- `Show me the relevant RevoGrid types for ColumnRegular and BeforeEdit before writing code.`
+- `Use RevoGrid types as the source of truth for grid configuration and event names.`
 
 ## Source layout
 
@@ -141,7 +234,9 @@ pnpm dev
 - MCP endpoint: `http://localhost:8787/mcp`
 - Health endpoint: `http://localhost:8787/health`
 
-Example initialize request:
+## Manual MCP testing
+
+### Initialize
 
 ```bash
 curl -X POST http://localhost:8787/mcp \
@@ -159,26 +254,120 @@ curl -X POST http://localhost:8787/mcp \
   }'
 ```
 
-Example anonymous tool payload:
+### List tools
 
-```json
-{
-  "name": "search_revogrid_docs",
-  "arguments": {
-    "query": "editable React grid",
-    "framework": "react",
-    "limit": 3
-  }
-}
+```bash
+curl -X POST http://localhost:8787/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":2,
+    "method":"tools/list",
+    "params":{}
+  }'
 ```
 
-Example paid Pro request:
+### Call `search_revogrid_docs`
 
-- send `x-revogrid-entitlement: paid_pro` to `/mcp`
+```bash
+curl -X POST http://localhost:8787/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":3,
+    "method":"tools/call",
+    "params":{
+      "name":"search_revogrid_docs",
+      "arguments":{
+        "query":"editable React grid",
+        "framework":"react",
+        "limit":3
+      }
+    }
+  }'
+```
+
+### Read a resource
+
+```bash
+curl -X POST http://localhost:8787/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":4,
+    "method":"resources/read",
+    "params":{
+      "uri":"revogrid://versions/all"
+    }
+  }'
+```
+
+### Test Pro responses
+
+Send the entitlement header:
+
+```bash
+-H 'x-revogrid-entitlement: paid_pro'
+```
+
+Example:
+
+```bash
+curl -X POST http://localhost:8787/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -H 'x-revogrid-entitlement: paid_pro' \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":5,
+    "method":"tools/call",
+    "params":{
+      "name":"search_revogrid_docs",
+      "arguments":{
+        "query":"pivot",
+        "limit":5
+      }
+    }
+  }'
+```
+
+## Postman testing
+
+Use a collection variable:
+
+- `baseUrl = http://localhost:8787`
+
+Set collection headers:
+
+- `Content-Type: application/json`
+- `Accept: application/json, text/event-stream`
+
+Recommended Postman requests:
+
+1. `GET {{baseUrl}}/health`
+2. `POST {{baseUrl}}/mcp` with `initialize`
+3. `POST {{baseUrl}}/mcp` with `tools/list`
+4. `POST {{baseUrl}}/mcp` with `tools/call` for `search_revogrid_docs`
+5. `POST {{baseUrl}}/mcp` with `tools/call` for `find_examples`
+6. `POST {{baseUrl}}/mcp` with `tools/call` for `resolve_feature_matrix`
+7. `POST {{baseUrl}}/mcp` with `tools/call` for `get_migration_notes`
+8. `POST {{baseUrl}}/mcp` with `resources/read`
+
+Good manual test queries:
+
+- `editable React grid`
+- `beforeedit`
+- `custom column type`
+- `pivot`
+- `upgrade from v4 to v5`
 
 ## Commands
 
 - `pnpm dev` starts the server
+- `pnpm start` starts the built server
 - `pnpm build` builds the workspace
 - `pnpm test` runs Vitest
 - `pnpm lint` runs ESLint
@@ -223,6 +412,7 @@ Good candidates for future private wiring:
 - Postgres + pgvector persistence: yes
 - deterministic local retrieval path: yes
 - anonymous callers filtered from Pro chunks: yes
+- type-informed API retrieval from RevoGrid source: yes
 
 ## Troubleshooting
 

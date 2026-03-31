@@ -2,6 +2,7 @@ export * from './embeddings/embedChunks.js';
 export * from './fixtures/seedData.js';
 export * from './parsers/html.js';
 export * from './parsers/markdown.js';
+export * from './parsers/typescript.js';
 export * from './pipelines/buildCatalog.js';
 export * from './pipelines/ingestPro.js';
 export * from './pipelines/ingestPublic.js';

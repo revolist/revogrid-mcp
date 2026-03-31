@@ -221,6 +221,17 @@ describe.sequential('buildCatalogDataset', () => {
     expect(sources.some((source) => source.relativePath.includes('src/components/overrides/Header.astro'))).toBe(false);
     expect(sources.some((source) => source.relativePath.includes('src/components/pivot/Pivot.tsx'))).toBe(true);
   });
+
+  it('turns type files into instruction-rich API chunks', async () => {
+    const dataset = await buildCatalogDataset();
+    const interfacesChunk = dataset.chunks.find((chunk) => chunk.sourcePath === 'revogrid/src/types/interfaces.ts');
+
+    expect(interfacesChunk?.title).toBe('BeforeEditArgs');
+    expect(interfacesChunk?.symbols).toContain('ColumnRegular');
+    expect(interfacesChunk?.body).toContain('Exported symbols: BeforeEditArgs, ColumnRegular.');
+    expect(interfacesChunk?.body).toContain('Interface BeforeEditArgs');
+    expect(interfacesChunk?.body).toContain('- prop: string');
+  });
 });
 
 async function writeFixtureFile(rootPath: string, relativePath: string, contents: string): Promise<void> {

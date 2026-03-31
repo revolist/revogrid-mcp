@@ -10,6 +10,7 @@ import {
   getDocsSources,
   getExampleSources
 } from '@revogrid-mcp/ingestion';
+import type { DocumentChunk } from '@revogrid-mcp/content-model';
 import { saveCatalogDataset } from '@revogrid-mcp/ingestion/storage/saveChunks';
 import { Pool } from 'pg';
 
@@ -28,6 +29,7 @@ export async function runReindex(): Promise<void> {
   const embeddings = getCatalogEmbeddings(dataset);
 
   const sourceInventory = { docs, examples, changelog, api };
+  const summary = buildIndexSummary(sourceInventory, dataset.chunks, absolutePath, config.CONTENT_BACKEND === 'postgres');
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(
@@ -43,6 +45,7 @@ export async function runReindex(): Promise<void> {
           migrationCount: dataset.migrations.length,
           embeddingCount: embeddings.length
         },
+        summary,
         dataset
       },
       null,
@@ -62,16 +65,72 @@ export async function runReindex(): Promise<void> {
 
   console.log(
     JSON.stringify(
-      {
-        writtenTo: absolutePath,
-        availableSources: Object.values(sourceInventory).flat().length,
-        chunkCount: dataset.chunks.length,
-        persistedToPostgres: config.CONTENT_BACKEND === 'postgres'
-      },
+      summary,
       null,
       2,
     ),
   );
+}
+
+function buildIndexSummary(
+  sourceInventory: Record<'docs' | 'examples' | 'changelog' | 'api', Awaited<ReturnType<typeof getDocsSources>>>,
+  chunks: DocumentChunk[],
+  absolutePath: string,
+  persistedToPostgres: boolean,
+) {
+  const allSources = Object.values(sourceInventory).flat();
+
+  return {
+    writtenTo: absolutePath,
+    persistedToPostgres,
+    totalSourceFiles: allSources.length,
+    sourceFilesByCategory: {
+      docs: sourceInventory.docs.length,
+      examples: sourceInventory.examples.length,
+      changelog: sourceInventory.changelog.length,
+      api: sourceInventory.api.length
+    },
+    sourceFilesByRepository: countBy(allSources, (source) => source.repository),
+    sourceRoots: uniqueSourceRoots(allSources),
+    chunkCount: chunks.length,
+    chunksByDocType: countBy(chunks, (chunk) => chunk.docType),
+    chunksBySurface: countBy(chunks, (chunk) => chunk.surface),
+    chunksByFramework: countBy(chunks, (chunk) => chunk.framework ?? 'unspecified'),
+    requiresProChunkCount: chunks.filter((chunk) => chunk.requiresPro).length,
+    typedApiChunkCount: chunks.filter((chunk) =>
+      chunk.sourcePath?.includes('/src/types/') || chunk.sourcePath?.includes('/release/plugins/'),
+    ).length
+  };
+}
+
+function countBy<TItem>(
+  values: TItem[],
+  selector: (value: TItem) => string,
+): Record<string, number> {
+  return values.reduce<Record<string, number>>((accumulator, value) => {
+    const key = selector(value);
+    accumulator[key] = (accumulator[key] ?? 0) + 1;
+    return accumulator;
+  }, {});
+}
+
+function uniqueSourceRoots(
+  sources: Awaited<ReturnType<typeof getDocsSources>>,
+): Array<{ repository: string; source: string; rootPath: string }> {
+  const uniqueRoots = new Map<string, { repository: string; source: string; rootPath: string }>();
+
+  for (const source of sources) {
+    const key = `${source.repository}:${source.source}:${source.rootPath}`;
+    if (!uniqueRoots.has(key)) {
+      uniqueRoots.set(key, {
+        repository: source.repository,
+        source: source.source,
+        rootPath: source.rootPath
+      });
+    }
+  }
+
+  return [...uniqueRoots.values()];
 }
 
 async function main(): Promise<void> {

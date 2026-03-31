@@ -21,6 +21,10 @@ import {
   resolveMarkdownIncludes,
   stripMarkdown
 } from '../parsers/markdown.js';
+import {
+  extractTypeInstructionDocument,
+  type TypeInstructionDocument
+} from '../parsers/typescript.js';
 import { getApiSources } from '../sources/api.js';
 import { getChangelogSources } from '../sources/changelog.js';
 import { getDocsSources } from '../sources/docs.js';
@@ -89,18 +93,25 @@ async function normalizeSourceFile(
     ? await resolveMarkdownIncludes(rawContent, source.absolutePath)
     : rawContent;
   const { attributes, body } = parseFrontmatter(resolvedContent);
-  const title = attributes.title ?? extractFirstHeading(body) ?? humanizePath(source.relativePath);
+  const typeInstructions = shouldExtractTypeInstructions(source, extension)
+    ? extractTypeInstructionDocument(resolvedContent)
+    : null;
+  const title =
+    attributes.title ??
+    typeInstructions?.title ??
+    extractFirstHeading(body) ??
+    humanizePath(source.relativePath);
   const framework = detectFramework(source.relativePath, title, resolvedContent);
   const surface = detectSurface(source, title, resolvedContent);
   const docType = detectDocType(source.category, source.relativePath, extension);
   const requiresPro = inferRequiresPro(source, title, resolvedContent, surface);
-  const plainBody = normalizeBody(body, extension);
+  const plainBody = normalizeBody(body, extension, typeInstructions);
   if (!plainBody) {
     return null;
   }
 
   const url = buildCanonicalUrl(source);
-  const summary = summarizeBody(attributes.description, plainBody);
+  const summary = summarizeBody(attributes.description ?? typeInstructions?.summary, plainBody);
 
   return {
     source,
@@ -116,7 +127,7 @@ async function normalizeSourceFile(
       docType,
       version: detectVersion(source, packageVersions),
       requiresPro,
-      symbols: extractSymbols(title, resolvedContent, plainBody),
+      symbols: extractSymbols(title, resolvedContent, plainBody, typeInstructions?.symbols),
       stability: detectStability(resolvedContent),
       url,
       sourcePath: `${source.repository}/${source.relativePath}`.replace(/\\/g, '/'),
@@ -270,7 +281,15 @@ function deriveMigrations(
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-function normalizeBody(content: string, extension: string): string {
+function normalizeBody(
+  content: string,
+  extension: string,
+  typeInstructions?: TypeInstructionDocument | null,
+): string {
+  if (typeInstructions?.body) {
+    return typeInstructions.body;
+  }
+
   if (MARKDOWN_EXTENSIONS.has(extension) || extension === '.astro' || extension === '.vue' || extension === '.svelte') {
     return stripMarkdown(content);
   }
@@ -280,6 +299,15 @@ function normalizeBody(content: string, extension: string): string {
 
 function summarizeBody(frontmatterDescription: string | undefined, body: string): string {
   return (frontmatterDescription ?? firstSentence(body)).slice(0, 220);
+}
+
+function shouldExtractTypeInstructions(source: SourceFile, extension: string): boolean {
+  if (!(extension === '.ts' || extension === '.tsx')) {
+    return false;
+  }
+
+  const relativePath = source.relativePath.replace(/\\/g, '/');
+  return source.category === 'api' && (relativePath.startsWith('src/types/') || relativePath.startsWith('release/plugins/'));
 }
 
 function buildChunkId(repository: SourceRepository, relativePath: string): string {
@@ -454,7 +482,12 @@ function extractPackageNames(content: string): string[] | undefined {
   return packages.length > 0 ? packages : undefined;
 }
 
-function extractSymbols(title: string, content: string, body: string): string[] {
+function extractSymbols(
+  title: string,
+  content: string,
+  body: string,
+  preferredSymbols: string[] = [],
+): string[] {
   const inlineCode = [...content.matchAll(/`([^`]+)`/g)]
     .map((match) => match[1]?.trim())
     .filter((value): value is string => Boolean(value));
@@ -468,7 +501,7 @@ function extractSymbols(title: string, content: string, body: string): string[] 
       .filter((value): value is string => Boolean(value)),
   );
 
-  return unique([...identifiers.slice(0, 40), ...tokens]).slice(0, 80);
+  return unique([...preferredSymbols, ...identifiers.slice(0, 40), ...tokens]).slice(0, 80);
 }
 
 function detectStability(content: string): DocumentChunk['stability'] {
