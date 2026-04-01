@@ -39,7 +39,39 @@ describe('http integration', () => {
     });
   });
 
-  it('initializes the MCP server over /mcp', async () => {
+  const initializePayload = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: {
+        name: 'vitest',
+        version: '0.0.0'
+      }
+    }
+  };
+
+  it('initializes the MCP server over /', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: initializePayload
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: 1
+    });
+  });
+
+  it('keeps /mcp as a compatibility alias', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/mcp',
@@ -47,19 +79,7 @@ describe('http integration', () => {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream'
       },
-      payload: {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {},
-          clientInfo: {
-            name: 'vitest',
-            version: '0.0.0'
-          }
-        }
-      }
+      payload: initializePayload
     });
 
     expect(response.statusCode).toBe(200);

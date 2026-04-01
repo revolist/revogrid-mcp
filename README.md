@@ -72,7 +72,7 @@ Default local base URL: `http://localhost:8787`
 
 ## What is included
 
-- Streamable HTTP MCP endpoint at `/mcp`
+- Streamable HTTP MCP endpoint at `/` with `/mcp` compatibility
 - Health endpoint at `/health`
 - MCP tools:
   - `search_revogrid_docs`
@@ -97,18 +97,18 @@ Default local base URL: `http://localhost:8787`
 
 ## Install in AI clients
 
-Once the server is running locally, use `http://localhost:8787/mcp`.
+Once the server is running locally, use `http://localhost:8787`.
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http revogrid http://localhost:8787/mcp
+claude mcp add --transport http revogrid http://localhost:8787
 ```
 
 ### Codex
 
 ```bash
-codex mcp add revogrid --url http://localhost:8787/mcp
+codex mcp add revogrid --url http://localhost:8787
 ```
 
 ### Cursor
@@ -119,7 +119,7 @@ Open MCP settings and add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "RevoGrid": {
-      "url": "http://localhost:8787/mcp",
+      "url": "http://localhost:8787",
       "type": "http"
     }
   }
@@ -134,7 +134,7 @@ Open `MCP: Add Server...` and choose a remote HTTP MCP server, or add this to `.
 {
   "servers": {
     "RevoGrid MCP": {
-      "url": "http://localhost:8787/mcp",
+      "url": "http://localhost:8787",
       "type": "http"
     }
   },
@@ -412,7 +412,7 @@ docker compose up -d app
 With those settings, Traefik can route requests like:
 
 - `http://revogrid-mcp.localhost/health`
-- `http://revogrid-mcp.localhost/mcp`
+- `http://revogrid-mcp.localhost/`
 
 Notes:
 
@@ -422,7 +422,7 @@ Notes:
 
 ## MCP connection URL
 
-- MCP endpoint: `http://localhost:8787/mcp`
+- MCP endpoint: `http://localhost:8787`
 - Health endpoint: `http://localhost:8787/health`
 
 ## Manual MCP testing
@@ -430,7 +430,7 @@ Notes:
 ### Initialize
 
 ```bash
-curl -X POST http://localhost:8787/mcp \
+curl -X POST http://localhost:8787/ \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{
@@ -448,7 +448,7 @@ curl -X POST http://localhost:8787/mcp \
 ### List tools
 
 ```bash
-curl -X POST http://localhost:8787/mcp \
+curl -X POST http://localhost:8787/ \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{
@@ -462,7 +462,7 @@ curl -X POST http://localhost:8787/mcp \
 ### Call `search_revogrid_docs`
 
 ```bash
-curl -X POST http://localhost:8787/mcp \
+curl -X POST http://localhost:8787/ \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{
@@ -483,7 +483,7 @@ curl -X POST http://localhost:8787/mcp \
 ### Read a resource
 
 ```bash
-curl -X POST http://localhost:8787/mcp \
+curl -X POST http://localhost:8787/ \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{
@@ -507,7 +507,7 @@ Send the entitlement header:
 Example:
 
 ```bash
-curl -X POST http://localhost:8787/mcp \
+curl -X POST http://localhost:8787/ \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -H 'x-revogrid-entitlement: paid_pro' \
@@ -539,13 +539,13 @@ Set collection headers:
 Recommended Postman requests:
 
 1. `GET {{baseUrl}}/health`
-2. `POST {{baseUrl}}/mcp` with `initialize`
-3. `POST {{baseUrl}}/mcp` with `tools/list`
-4. `POST {{baseUrl}}/mcp` with `tools/call` for `search_revogrid_docs`
-5. `POST {{baseUrl}}/mcp` with `tools/call` for `find_examples`
-6. `POST {{baseUrl}}/mcp` with `tools/call` for `resolve_feature_matrix`
-7. `POST {{baseUrl}}/mcp` with `tools/call` for `get_migration_notes`
-8. `POST {{baseUrl}}/mcp` with `resources/read`
+2. `POST {{baseUrl}}/` with `initialize`
+3. `POST {{baseUrl}}/` with `tools/list`
+4. `POST {{baseUrl}}/` with `tools/call` for `search_revogrid_docs`
+5. `POST {{baseUrl}}/` with `tools/call` for `find_examples`
+6. `POST {{baseUrl}}/` with `tools/call` for `resolve_feature_matrix`
+7. `POST {{baseUrl}}/` with `tools/call` for `get_migration_notes`
+8. `POST {{baseUrl}}/` with `resources/read`
 
 Good manual test queries:
 
@@ -594,7 +594,7 @@ Good candidates for future private wiring:
 ## Spec alignment
 
 - read-only MCP server: yes
-- single Streamable HTTP endpoint at `/mcp`: yes
+- single Streamable HTTP endpoint at `/`: yes
 - health endpoint at `/health`: yes
 - MCP tool contracts unchanged: yes
 - MCP resources from the original spec: yes
@@ -608,5 +608,5 @@ Good candidates for future private wiring:
 
 - If `pnpm reindex` finds zero source files, run `git submodule update --init --recursive` and confirm `external/revogrid` plus `external/revogrid-pro` exist.
 - If you are using sibling repos instead of nested submodules, set `REVOGRID_SOURCE_ROOT` and `REVOGRID_PRO_SOURCE_ROOT` explicitly.
-- If `/mcp` returns `406`, make sure the client sends `Accept: application/json, text/event-stream`.
+- If `/` or `/mcp` returns `406`, make sure the client sends `Accept: application/json, text/event-stream`.
 - If you want a clean verification pass, run `pnpm lint`, `pnpm test`, and `pnpm build`.

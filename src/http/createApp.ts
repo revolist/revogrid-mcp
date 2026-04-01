@@ -1,6 +1,7 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import Fastify from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppError, createLogger } from '@revogrid-mcp/shared';
 
@@ -24,25 +25,33 @@ export function createApp(config: AppConfig, services: AppServices) {
     backend: config.CONTENT_BACKEND
   }));
 
+  const mcpHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    const context = resolveRequestContext(request, config);
+    const server = createMcpServer(services, context);
+    const transport = new StreamableHTTPServerTransport({
+      enableJsonResponse: true
+    });
+
+    reply.hijack();
+
+    try {
+      await server.connect(transport as unknown as Transport);
+      await transport.handleRequest(request.raw, reply.raw, request.body);
+    } finally {
+      await transport.close();
+    }
+  };
+
+  app.route({
+    method: ['GET', 'POST', 'DELETE'],
+    url: '/',
+    handler: mcpHandler
+  });
+
   app.route({
     method: ['GET', 'POST', 'DELETE'],
     url: '/mcp',
-    handler: async (request, reply) => {
-      const context = resolveRequestContext(request, config);
-      const server = createMcpServer(services, context);
-      const transport = new StreamableHTTPServerTransport({
-        enableJsonResponse: true
-      });
-
-      reply.hijack();
-
-      try {
-        await server.connect(transport as unknown as Transport);
-        await transport.handleRequest(request.raw, reply.raw, request.body);
-      } finally {
-        await transport.close();
-      }
-    }
+    handler: mcpHandler
   });
 
   app.setErrorHandler((error, _request, reply) => {
