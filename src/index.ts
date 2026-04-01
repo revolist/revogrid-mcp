@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 import { createLogger } from '@revogrid-mcp/shared';
 
 import { loadConfig } from './config/env.js';

@@ -47,7 +47,8 @@ const AppEnvSchema = z.object({
   ENABLE_RATE_LIMITING: booleanFromEnv.default(false),
   RATE_LIMIT_MAX: integerFromEnv.default(60),
   RATE_LIMIT_WINDOW_MS: integerFromEnv.default(60_000),
-  ENABLE_AUTH_PLACEHOLDER: booleanFromEnv.default(false)
+  ENABLE_AUTH_PLACEHOLDER: booleanFromEnv.default(false),
+  AUTH_JWT_SECRET: z.string().optional()
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;

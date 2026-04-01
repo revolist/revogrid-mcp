@@ -44,6 +44,8 @@ pnpm install
 cp .env.example .env
 ```
 
+The server reads `.env` automatically when it starts.
+
 4. Build the real catalog from `external/revogrid` and `external/revogrid-pro`.
 
 ```bash
@@ -54,6 +56,14 @@ pnpm reindex
 
 ```bash
 pnpm dev
+```
+
+`pnpm dev` runs in watch mode and reloads on file changes.
+
+If you want a single non-watch run:
+
+```bash
+pnpm dev:once
 ```
 
 6. Verify the health endpoint.
@@ -141,6 +151,88 @@ Open `MCP: Add Server...` and choose a remote HTTP MCP server, or add this to `.
   "inputs": []
 }
 ```
+
+## Pro access with JWT token
+
+The MCP server supports a Pro-aware mode where a valid bearer JWT is treated as a Pro user.
+
+Behavior:
+
+- valid `Authorization: Bearer <jwt>` => `paid_pro`
+- missing token => `anonymous`
+- invalid or expired token => `anonymous`
+
+Enable it in `.env`:
+
+```bash
+ENABLE_AUTH_PLACEHOLDER=true
+AUTH_JWT_SECRET=your-shared-jwt-secret
+```
+
+This is the intended setup when your app, proxy, or MCP gateway issues JWTs for authenticated RevoGrid Pro users.
+
+### How to use it
+
+1. Start the MCP server with `ENABLE_AUTH_PLACEHOLDER=true`.
+2. Set `AUTH_JWT_SECRET` to the same secret used to sign your `HS256` JWTs.
+3. Send `Authorization: Bearer <jwt>` from the MCP client.
+4. Valid tokens unlock Pro-only MCP results automatically.
+
+### Client examples
+
+Use the same MCP URL and add an authorization header where the client supports custom headers.
+
+### Cursor
+
+```json
+{
+  "mcpServers": {
+    "RevoGrid Pro": {
+      "url": "http://localhost:8787",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer <your-jwt>"
+      }
+    }
+  }
+}
+```
+
+### VS Code
+
+```json
+{
+  "servers": {
+    "RevoGrid MCP Pro": {
+      "url": "http://localhost:8787",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer <your-jwt>"
+      }
+    }
+  },
+  "inputs": []
+}
+```
+
+### Codex and Claude Code
+
+Use the same MCP URL and configure the client or its proxy layer to send:
+
+```http
+Authorization: Bearer <your-jwt>
+```
+
+If the client cannot attach headers directly, place the MCP server behind your own authenticated proxy and inject the header there.
+
+### Recommended production flow
+
+1. User signs in to your app.
+2. Your app or proxy issues a JWT for that user.
+3. The MCP client sends that JWT as a bearer token.
+4. The MCP server validates it and serves Pro results.
+
+Do not share the raw signing secret with end users or rely on manually supplied Pro headers in production.
 
 ## Good prompts for agents
 
@@ -254,8 +346,8 @@ Copy `.env.example` to `.env` and adjust only what you need.
   Usually not needed if nested submodules or sibling repo fallback are present.
 
 - `DEFAULT_ENTITLEMENT`
-  Values: `anonymous`, `trial`, `paid_pro`, `internal_admin`
-  Fallback entitlement used when a request does not provide one.
+  Values: `anonymous`, `paid_pro`
+  Fallback entitlement used when JWT auth is disabled and a request does not provide one.
 
 - `ENABLE_ORIGIN_VALIDATION`
   Values: `true`, `false`
@@ -279,7 +371,11 @@ Copy `.env.example` to `.env` and adjust only what you need.
 
 - `ENABLE_AUTH_PLACEHOLDER`
   Values: `true`, `false`
-  Reserved compatibility flag for placeholder auth wiring.
+  Enables JWT-based Pro detection from the `Authorization` bearer token.
+
+- `AUTH_JWT_SECRET`
+  Shared secret used to verify incoming `HS256` JWT bearer tokens.
+  Valid token => `paid_pro`, otherwise the request is treated as `anonymous`.
 
 ### Docker Compose and local container wiring
 
@@ -496,21 +592,15 @@ curl -X POST http://localhost:8787/ \
   }'
 ```
 
-### Test Pro responses
+### Test Pro responses with JWT
 
-Send the entitlement header:
-
-```bash
--H 'x-revogrid-entitlement: paid_pro'
-```
-
-Example:
+Send a valid bearer token:
 
 ```bash
 curl -X POST http://localhost:8787/ \
+  -H 'authorization: Bearer <your-jwt>' \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
-  -H 'x-revogrid-entitlement: paid_pro' \
   -d '{
     "jsonrpc":"2.0",
     "id":5,
@@ -519,6 +609,7 @@ curl -X POST http://localhost:8787/ \
       "name":"search_revogrid_docs",
       "arguments":{
         "query":"pivot",
+        "requiresPro":true,
         "limit":5
       }
     }

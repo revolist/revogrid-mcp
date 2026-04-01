@@ -4,6 +4,20 @@ import { loadConfig } from '../src/config/env.js';
 import { createApp } from '../src/http/createApp.js';
 import { createServices } from '../src/services/serviceFactory.js';
 
+const initializePayload = {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: {
+      name: 'vitest',
+      version: '0.0.0'
+    }
+  }
+};
+
 describe('http integration', () => {
   const config = loadConfig({
     NODE_ENV: 'test',
@@ -39,19 +53,48 @@ describe('http integration', () => {
     });
   });
 
-  const initializePayload = {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'initialize',
-    params: {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: {
-        name: 'vitest',
-        version: '0.0.0'
+  it('reports mcp request statistics on /stats', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: initializePayload
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: initializePayload
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/stats'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      service: 'revogrid-mcp',
+      backend: 'memory',
+      requests: {
+        health: 1,
+        mcpTotal: 2,
+        mcpSucceeded: 2,
+        mcpFailed: 0,
+        mcpByPath: {
+          root: 1,
+          mcp: 1
+        }
       }
-    }
-  };
+    });
+  });
 
   it('initializes the MCP server over /', async () => {
     const response = await app.inject({

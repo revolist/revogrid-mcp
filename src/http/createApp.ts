@@ -13,19 +13,55 @@ import type { AppServices } from '../types/catalog.js';
 
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = createLogger(config.LOG_LEVEL);
+  const requestStats = {
+    startedAt: new Date().toISOString(),
+    healthRequests: 0,
+    mcpRequestsTotal: 0,
+    mcpRequestsSucceeded: 0,
+    mcpRequestsFailed: 0,
+    mcpRequestsByPath: {
+      root: 0,
+      mcp: 0
+    }
+  };
   const app = Fastify({
     logger: false
   });
 
   registerSecurityHooks(app, config);
 
-  app.get('/health', () => ({
-    status: 'ok',
+  app.get('/health', () => {
+    requestStats.healthRequests += 1;
+
+    return {
+      status: 'ok',
+      service: 'revogrid-mcp',
+      backend: config.CONTENT_BACKEND
+    };
+  });
+
+  app.get('/stats', () => ({
     service: 'revogrid-mcp',
-    backend: config.CONTENT_BACKEND
+    startedAt: requestStats.startedAt,
+    backend: config.CONTENT_BACKEND,
+    requests: {
+      health: requestStats.healthRequests,
+      mcpTotal: requestStats.mcpRequestsTotal,
+      mcpSucceeded: requestStats.mcpRequestsSucceeded,
+      mcpFailed: requestStats.mcpRequestsFailed,
+      mcpByPath: requestStats.mcpRequestsByPath
+    }
   }));
 
   const mcpHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    requestStats.mcpRequestsTotal += 1;
+    if (request.routeOptions.url === '/') {
+      requestStats.mcpRequestsByPath.root += 1;
+    }
+    if (request.routeOptions.url === '/mcp') {
+      requestStats.mcpRequestsByPath.mcp += 1;
+    }
+
     const context = resolveRequestContext(request, config);
     const server = createMcpServer(services, context);
     const transport = new StreamableHTTPServerTransport({
@@ -37,6 +73,7 @@ export function createApp(config: AppConfig, services: AppServices) {
     try {
       await server.connect(transport as unknown as Transport);
       await transport.handleRequest(request.raw, reply.raw, request.body);
+      requestStats.mcpRequestsSucceeded += 1;
     } finally {
       await transport.close();
     }
@@ -55,6 +92,7 @@ export function createApp(config: AppConfig, services: AppServices) {
   });
 
   app.setErrorHandler((error, _request, reply) => {
+    requestStats.mcpRequestsFailed += 1;
     const handledError = error instanceof Error ? error : new Error('Unknown error');
 
     logger.error('request_failed', {
