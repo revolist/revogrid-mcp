@@ -5,14 +5,19 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppError, createLogger } from '@revogrid-mcp/shared';
 
-import { resolveRequestContext } from '../auth/authenticator.js';
+import { resolveProRequestContext, resolveRequestContext } from '../auth/authenticator.js';
 import type { AppConfig } from '../config/env.js';
 import { createMcpServer } from '../mcp/createMcpServer.js';
+import { FilteredContentRepository } from '../repositories/filteredContentRepository.js';
+import { createServicesForRepository } from '../services/serviceFactory.js';
 import { registerSecurityHooks } from './middleware/security.js';
 import type { AppServices } from '../types/catalog.js';
 
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = createLogger(config.LOG_LEVEL);
+  const publicServices = createServicesForRepository(
+    new FilteredContentRepository(services.contentRepository, (chunk) => !chunk.requiresPro),
+  );
   const requestStats = {
     startedAt: new Date().toISOString(),
     healthRequests: 0,
@@ -21,7 +26,7 @@ export function createApp(config: AppConfig, services: AppServices) {
     mcpRequestsFailed: 0,
     mcpRequestsByPath: {
       root: 0,
-      mcp: 0
+      pro: 0
     }
   };
   const app = Fastify({
@@ -53,17 +58,22 @@ export function createApp(config: AppConfig, services: AppServices) {
     }
   }));
 
-  const mcpHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  const mcpHandler = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    routeServices: AppServices,
+    contextResolver: typeof resolveRequestContext,
+  ) => {
     requestStats.mcpRequestsTotal += 1;
     if (request.routeOptions.url === '/') {
       requestStats.mcpRequestsByPath.root += 1;
     }
-    if (request.routeOptions.url === '/mcp') {
-      requestStats.mcpRequestsByPath.mcp += 1;
+    if (request.routeOptions.url === '/pro') {
+      requestStats.mcpRequestsByPath.pro += 1;
     }
 
-    const context = resolveRequestContext(request, config);
-    const server = createMcpServer(services, context);
+    const context = contextResolver(request, config);
+    const server = createMcpServer(routeServices, context);
     const transport = new StreamableHTTPServerTransport({
       enableJsonResponse: true
     });
@@ -82,13 +92,13 @@ export function createApp(config: AppConfig, services: AppServices) {
   app.route({
     method: ['GET', 'POST', 'DELETE'],
     url: '/',
-    handler: mcpHandler
+    handler: (request, reply) => mcpHandler(request, reply, publicServices, resolveRequestContext)
   });
 
   app.route({
     method: ['GET', 'POST', 'DELETE'],
-    url: '/mcp',
-    handler: mcpHandler
+    url: '/pro',
+    handler: (request, reply) => mcpHandler(request, reply, services, resolveProRequestContext)
   });
 
   app.setErrorHandler((error, _request, reply) => {

@@ -82,7 +82,8 @@ Default local base URL: `http://localhost:8787`
 
 ## What is included
 
-- Streamable HTTP MCP endpoint at `/` with `/mcp` compatibility
+- Streamable HTTP MCP endpoint at `/` for community docs only
+- Streamable HTTP MCP endpoint at `/pro` for combined community + Pro docs
 - Health endpoint at `/health`
 - MCP tools:
   - `search_revogrid_docs`
@@ -152,35 +153,33 @@ Open `MCP: Add Server...` and choose a remote HTTP MCP server, or add this to `.
 }
 ```
 
-## Pro access with JWT token
+## Pro route access
 
-The MCP server supports a Pro-aware mode where a valid bearer JWT is treated as a Pro user.
+The MCP server now splits public and Pro access by route:
 
-Behavior:
-
-- valid `Authorization: Bearer <jwt>` => `paid_pro`
-- missing token => `anonymous`
-- invalid or expired token => `anonymous`
+- `/` always exposes community content only
+- `/pro` exposes combined community + Pro content
 
 Enable it in `.env`:
 
 ```bash
-ENABLE_AUTH_PLACEHOLDER=true
+ENABLE_PRO_ROUTE_AUTH=true
 AUTH_JWT_SECRET=your-shared-jwt-secret
 ```
 
-This is the intended setup when your app, proxy, or MCP gateway issues JWTs for authenticated RevoGrid Pro users.
+If `ENABLE_PRO_ROUTE_AUTH=false`, the `/pro` route is open and serves combined docs without authentication.
+If `ENABLE_PRO_ROUTE_AUTH=true`, `/pro` requires a valid `Authorization: Bearer <jwt>` header.
 
 ### How to use it
 
-1. Start the MCP server with `ENABLE_AUTH_PLACEHOLDER=true`.
+1. Start the MCP server.
 2. Set `AUTH_JWT_SECRET` to the same secret used to sign your `HS256` JWTs.
-3. Send `Authorization: Bearer <jwt>` from the MCP client.
-4. Valid tokens unlock Pro-only MCP results automatically.
+3. If `ENABLE_PRO_ROUTE_AUTH=true`, send `Authorization: Bearer <jwt>` from the MCP client.
+4. Point Pro-enabled clients to `http://localhost:8787/pro`.
 
 ### Client examples
 
-Use the same MCP URL and add an authorization header where the client supports custom headers.
+Use `http://localhost:8787/pro` and add an authorization header where the client supports custom headers.
 
 ### Cursor
 
@@ -188,7 +187,7 @@ Use the same MCP URL and add an authorization header where the client supports c
 {
   "mcpServers": {
     "RevoGrid Pro": {
-      "url": "http://localhost:8787",
+      "url": "http://localhost:8787/pro",
       "type": "http",
       "headers": {
         "Authorization": "Bearer <your-jwt>"
@@ -204,7 +203,7 @@ Use the same MCP URL and add an authorization header where the client supports c
 {
   "servers": {
     "RevoGrid MCP Pro": {
-      "url": "http://localhost:8787",
+      "url": "http://localhost:8787/pro",
       "type": "http",
       "headers": {
         "Authorization": "Bearer <your-jwt>"
@@ -217,7 +216,7 @@ Use the same MCP URL and add an authorization header where the client supports c
 
 ### Codex and Claude Code
 
-Use the same MCP URL and configure the client or its proxy layer to send:
+Use the `/pro` MCP URL and configure the client or its proxy layer to send:
 
 ```http
 Authorization: Bearer <your-jwt>
@@ -230,7 +229,7 @@ If the client cannot attach headers directly, place the MCP server behind your o
 1. User signs in to your app.
 2. Your app or proxy issues a JWT for that user.
 3. The MCP client sends that JWT as a bearer token.
-4. The MCP server validates it and serves Pro results.
+4. The MCP server validates it and serves combined community + Pro results from `/pro`.
 
 Do not share the raw signing secret with end users or rely on manually supplied Pro headers in production.
 
@@ -345,10 +344,6 @@ Copy `.env.example` to `.env` and adjust only what you need.
   Optional override for the RevoGrid Pro source root on host-based runs.
   Usually not needed if nested submodules or sibling repo fallback are present.
 
-- `DEFAULT_ENTITLEMENT`
-  Values: `anonymous`, `paid_pro`
-  Fallback entitlement used when JWT auth is disabled and a request does not provide one.
-
 - `ENABLE_ORIGIN_VALIDATION`
   Values: `true`, `false`
   Enables request Origin header allowlisting.
@@ -369,13 +364,13 @@ Copy `.env.example` to `.env` and adjust only what you need.
   Default: `60000`
   Rate-limit window length in milliseconds.
 
-- `ENABLE_AUTH_PLACEHOLDER`
+- `ENABLE_PRO_ROUTE_AUTH`
   Values: `true`, `false`
-  Enables JWT-based Pro detection from the `Authorization` bearer token.
+  Enables JWT-based access control on the `/pro` route.
 
 - `AUTH_JWT_SECRET`
   Shared secret used to verify incoming `HS256` JWT bearer tokens.
-  Valid token => `paid_pro`, otherwise the request is treated as `anonymous`.
+  Used only when `ENABLE_PRO_ROUTE_AUTH=true`.
 
 ### Docker Compose and local container wiring
 
@@ -699,5 +694,5 @@ Good candidates for future private wiring:
 
 - If `pnpm reindex` finds zero source files, run `git submodule update --init --recursive` and confirm `external/revogrid` plus `external/revogrid-pro` exist.
 - If you are using sibling repos instead of nested submodules, set `REVOGRID_SOURCE_ROOT` and `REVOGRID_PRO_SOURCE_ROOT` explicitly.
-- If `/` or `/mcp` returns `406`, make sure the client sends `Accept: application/json, text/event-stream`.
+- If `/` or `/pro` returns `406`, make sure the client sends `Accept: application/json, text/event-stream`.
 - If you want a clean verification pass, run `pnpm lint`, `pnpm test`, and `pnpm build`.

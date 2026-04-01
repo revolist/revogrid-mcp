@@ -41,13 +41,12 @@ const AppEnvSchema = z.object({
   REINDEX_OUTPUT: z.string().default('data/catalog.json'),
   REVOGRID_SOURCE_ROOT: z.string().optional(),
   REVOGRID_PRO_SOURCE_ROOT: z.string().optional(),
-  DEFAULT_ENTITLEMENT: z.enum(['anonymous', 'paid_pro']).default('anonymous'),
   ENABLE_ORIGIN_VALIDATION: booleanFromEnv.default(false),
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
   ENABLE_RATE_LIMITING: booleanFromEnv.default(false),
   RATE_LIMIT_MAX: integerFromEnv.default(60),
   RATE_LIMIT_WINDOW_MS: integerFromEnv.default(60_000),
-  ENABLE_AUTH_PLACEHOLDER: booleanFromEnv.default(false),
+  ENABLE_PRO_ROUTE_AUTH: booleanFromEnv.default(false),
   AUTH_JWT_SECRET: z.string().optional()
 });
 

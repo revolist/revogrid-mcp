@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import jsonwebtoken from 'jsonwebtoken';
 
 import type { Entitlement } from '@revogrid-mcp/content-model';
-import { ConfigurationError } from '@revogrid-mcp/shared';
+import { AuthorizationError, ConfigurationError } from '@revogrid-mcp/shared';
 
 import type { AppConfig } from '../config/env.js';
 import type { RequestContext } from '../types/catalog.js';
@@ -11,17 +11,26 @@ export function resolveRequestContext(
   request: FastifyRequest,
   config: AppConfig,
 ): RequestContext {
-  if (config.ENABLE_AUTH_PLACEHOLDER) {
+  void request;
+  void config;
+
+  return {
+    entitlement: 'anonymous'
+  };
+}
+
+export function resolveProRequestContext(
+  request: FastifyRequest,
+  config: AppConfig,
+): RequestContext {
+  if (!config.ENABLE_PRO_ROUTE_AUTH) {
     return {
-      entitlement: resolveEntitlementFromAuthorization(request, config)
+      entitlement: 'paid_pro'
     };
   }
 
-  const headerValue = request.headers['x-revogrid-entitlement'];
-  const entitlement = normalizeEntitlement(headerValue, config.DEFAULT_ENTITLEMENT);
-
   return {
-    entitlement
+    entitlement: resolveEntitlementFromAuthorization(request, config)
   };
 }
 
@@ -30,27 +39,19 @@ function resolveEntitlementFromAuthorization(
   config: AppConfig,
 ): Entitlement {
   if (!config.AUTH_JWT_SECRET) {
-    throw new ConfigurationError('ENABLE_AUTH_PLACEHOLDER requires AUTH_JWT_SECRET.');
+    throw new ConfigurationError('ENABLE_PRO_ROUTE_AUTH requires AUTH_JWT_SECRET.');
   }
 
   const token = extractBearerToken(request.headers.authorization);
-  return token && isValidJwtToken(token, config.AUTH_JWT_SECRET) ? 'paid_pro' : 'anonymous';
-}
-
-function normalizeEntitlement(
-  rawValue: string | string[] | undefined,
-  fallback: Entitlement,
-): Entitlement {
-  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-  const normalizedFallback = fallback === 'paid_pro' ? 'paid_pro' : 'anonymous';
-
-  switch (value) {
-    case 'paid_pro':
-    case 'anonymous':
-      return value;
-    default:
-      return normalizedFallback;
+  if (!token) {
+    throw new AuthorizationError('A valid bearer token is required for /pro.');
   }
+
+  if (!isValidJwtToken(token, config.AUTH_JWT_SECRET)) {
+    throw new AuthorizationError('A valid bearer token is required for /pro.');
+  }
+
+  return 'paid_pro';
 }
 
 function extractBearerToken(

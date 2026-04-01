@@ -11,6 +11,10 @@ import type { AppServices } from '../types/catalog.js';
 
 export async function createServices(config: AppConfig): Promise<AppServices> {
   const contentRepository = await createContentRepository(config);
+  return createServicesForRepository(contentRepository);
+}
+
+export function createServicesForRepository(contentRepository: ContentRepository): AppServices {
   const searchService = new DefaultRevogridSearchService(contentRepository);
   const featureService = new DefaultFeatureMatrixService(contentRepository, searchService);
   const migrationService = new DefaultMigrationService(contentRepository, searchService);
