@@ -22,14 +22,13 @@ function normalizeEntitlement(
   fallback: Entitlement,
 ): Entitlement {
   const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  const normalizedFallback = fallback === 'paid_pro' ? 'paid_pro' : 'anonymous';
 
   switch (value) {
-    case 'trial':
     case 'paid_pro':
-    case 'internal_admin':
     case 'anonymous':
       return value;
     default:
-      return fallback;
+      return normalizedFallback;
   }
 }

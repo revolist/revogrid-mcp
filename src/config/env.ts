@@ -41,7 +41,7 @@ const AppEnvSchema = z.object({
   REINDEX_OUTPUT: z.string().default('data/catalog.json'),
   REVOGRID_SOURCE_ROOT: z.string().optional(),
   REVOGRID_PRO_SOURCE_ROOT: z.string().optional(),
-  DEFAULT_ENTITLEMENT: z.enum(['anonymous', 'trial', 'paid_pro', 'internal_admin']).default('anonymous'),
+  DEFAULT_ENTITLEMENT: z.enum(['anonymous', 'paid_pro']).default('anonymous'),
   ENABLE_ORIGIN_VALIDATION: booleanFromEnv.default(false),
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
   ENABLE_RATE_LIMITING: booleanFromEnv.default(false),

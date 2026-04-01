@@ -28,6 +28,15 @@ describe('retrieval filters', () => {
     expect(results.some((result) => result.chunk.id === 'guide-pivot-overview')).toBe(true);
   });
 
+  it('keeps pro chunks out of trial search results', async () => {
+    const results = await service.searchDocs('pivot feature', {
+      limit: 5,
+      entitlement: 'trial'
+    });
+
+    expect(results.some((result) => result.chunk.requiresPro)).toBe(false);
+  });
+
   it('applies framework filters', async () => {
     const results = await service.searchDocs('editable grid', {
       framework: 'react',

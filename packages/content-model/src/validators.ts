@@ -22,5 +22,5 @@ export function canAccessChunk(chunk: DocumentChunk, entitlement: Entitlement): 
     return true;
   }
 
-  return entitlement === 'paid_pro' || entitlement === 'internal_admin' || entitlement === 'trial';
+  return entitlement === 'paid_pro';
 }
