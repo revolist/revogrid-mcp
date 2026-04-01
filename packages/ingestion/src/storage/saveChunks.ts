@@ -14,9 +14,9 @@ export async function saveCatalogDataset(
   const client = await pool.connect();
 
   try {
-    await pgvector.registerTypes(client);
     await client.query('BEGIN');
     await ensureSchema(client, safeTableName);
+    await pgvector.registerTypes(client);
 
     const embeddings = embedChunks(dataset.chunks);
     const embeddingMap = new Map(embeddings.map((embedding) => [embedding.chunkId, embedding.vector]));

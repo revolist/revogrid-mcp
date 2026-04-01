@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    networks:
+      - internal
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -21,6 +23,8 @@ services:
       REVOGRID_PRO_SOURCE_ROOT: /app/external/revogrid-pro
     depends_on:
       - postgres
+    networks:
+      - internal
     ports:
       - '${APP_PUBLISHED_PORT:-8787}:8787'
     volumes:
@@ -48,6 +52,8 @@ services:
       REVOGRID_PRO_SOURCE_ROOT: /app/external/revogrid-pro
     depends_on:
       - postgres
+    networks:
+      - internal
     volumes:
       - ./data:/app/data
       - ${LOCAL_REVOGRID_SOURCE_PATH:-./external/revogrid}:/app/external/revogrid:ro
@@ -56,3 +62,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  internal:
+    driver: bridge
