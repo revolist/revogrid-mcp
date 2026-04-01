@@ -19,7 +19,6 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts",
     "reindex": "tsx scripts/reindex.ts",
     "backfill:symbols": "tsx scripts/backfillSymbols.ts"
   },

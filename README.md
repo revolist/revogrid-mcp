@@ -191,6 +191,136 @@ Resolution order is:
 2. nested submodules in `external/`
 3. sibling repos one level above `revogrid-mcp`
 
+## Environment variables
+
+Copy `.env.example` to `.env` and adjust only what you need.
+
+### App runtime
+
+- `NODE_ENV`
+  Values: `development`, `test`, `production`
+  Controls runtime mode and default logging/test behavior.
+
+- `PORT`
+  Default: `8787`
+  HTTP port used by the MCP server inside the process.
+
+- `HOST`
+  Default: `0.0.0.0`
+  Host/interface bound by the Fastify server.
+
+- `LOG_LEVEL`
+  Values: `debug`, `info`, `warn`, `error`
+  Controls server log verbosity.
+
+- `CONTENT_BACKEND`
+  Values: `memory`, `postgres`
+  Selects whether the server serves content from freshly built in-memory catalog data or from persisted Postgres tables.
+
+- `POSTGRES_HOST`
+  Default: `localhost`
+  Postgres host used when `CONTENT_BACKEND=postgres` and during reindex persistence.
+
+- `POSTGRES_PORT`
+  Default: `5432`
+  Postgres port used when `CONTENT_BACKEND=postgres` and during reindex persistence.
+
+- `POSTGRES_DB`
+  Default example: `revogrid_mcp`
+  Database name used for Postgres-backed retrieval and indexing.
+
+- `POSTGRES_USER`
+  Default example: `postgres`
+  Database username used for Postgres-backed retrieval and indexing.
+
+- `POSTGRES_PASSWORD`
+  Default example: `postgres`
+  Database password used for Postgres-backed retrieval and indexing.
+
+- `PGVECTOR_TABLE`
+  Default: `document_chunks`
+  Main Postgres table used for stored chunks and embeddings.
+
+- `REINDEX_OUTPUT`
+  Default: `data/catalog.json`
+  Output path for the generated catalog artifact.
+
+- `REVOGRID_SOURCE_ROOT`
+  Optional override for the RevoGrid core source root on host-based runs.
+  Usually not needed if nested submodules or sibling repo fallback are present.
+
+- `REVOGRID_PRO_SOURCE_ROOT`
+  Optional override for the RevoGrid Pro source root on host-based runs.
+  Usually not needed if nested submodules or sibling repo fallback are present.
+
+- `DEFAULT_ENTITLEMENT`
+  Values: `anonymous`, `trial`, `paid_pro`, `internal_admin`
+  Fallback entitlement used when a request does not provide one.
+
+- `ENABLE_ORIGIN_VALIDATION`
+  Values: `true`, `false`
+  Enables request Origin header allowlisting.
+
+- `ALLOWED_ORIGINS`
+  Comma-separated list such as `http://localhost:3000,http://localhost:6274`
+  Used only when `ENABLE_ORIGIN_VALIDATION=true`.
+
+- `ENABLE_RATE_LIMITING`
+  Values: `true`, `false`
+  Enables the built-in per-process rate limiter.
+
+- `RATE_LIMIT_MAX`
+  Default: `60`
+  Maximum request count allowed during the configured rate-limit window.
+
+- `RATE_LIMIT_WINDOW_MS`
+  Default: `60000`
+  Rate-limit window length in milliseconds.
+
+- `ENABLE_AUTH_PLACEHOLDER`
+  Values: `true`, `false`
+  Reserved compatibility flag for placeholder auth wiring.
+
+### Docker Compose and local container wiring
+
+- `POSTGRES_HOST`
+  In Docker Compose this is overridden to `postgres`, which is the service hostname on the internal Docker network.
+
+- `POSTGRES_PORT`
+  In Docker Compose this is overridden to `5432` inside the container network.
+
+- `LOCAL_REVOGRID_SOURCE_PATH`
+  Host path mounted into the container for RevoGrid core sources.
+  Default example: `./external/revogrid`
+  Override it only if your checkout lives somewhere else.
+
+- `LOCAL_REVOGRID_PRO_SOURCE_PATH`
+  Host path mounted into the container for RevoGrid Pro sources.
+  Default example: `./external/revogrid-pro`
+  Override it only if your checkout lives somewhere else.
+
+- `APP_PUBLISHED_PORT`
+  Default: `8787`
+  Host port published by the `app` service in Docker Compose.
+
+### Traefik and reverse proxy integration
+
+- `TRAEFIK_ENABLE`
+  Values: `true`, `false`
+  Enables Traefik labels on the `app` service.
+
+- `TRAEFIK_HOST`
+  Example: `mcp.rv-grid.com`
+  Host rule used by the Traefik router.
+
+- `TRAEFIK_ENTRYPOINTS`
+  Example: `web` or `websecure`
+  Traefik entrypoints assigned to the MCP router.
+
+- `TRAEFIK_TLS`
+  Values: `true`, `false`
+  Enables TLS on the Traefik router.
+
 ## Reindexing and persistence
 
 Generate a fresh catalog artifact:
@@ -249,21 +379,16 @@ Run reindex as a one-off container job:
 docker compose --profile jobs run --rm reindex
 ```
 
-Run seed as a one-off container job:
-
-```bash
-docker compose --profile jobs run --rm seed
-```
-
 Notes:
 
-- `seed` is an alias for the same real ingestion flow as `reindex`
 - `data/catalog.json` is written to the local `./data` folder through a bind mount
-- inside Docker Compose, `DATABASE_URL` is automatically pointed at the `postgres` service
+- inside Docker Compose, `POSTGRES_HOST` is automatically pointed at the `postgres` service
 - Docker Compose mounts your local source repos read-only into the container
-- by default it expects sibling paths `../revogrid` and `../revogrid-pro`
+- by default it mounts nested submodules from `./external/revogrid` and `./external/revogrid-pro`
 - override those with `LOCAL_REVOGRID_SOURCE_PATH` and `LOCAL_REVOGRID_PRO_SOURCE_PATH` in `.env` if needed
 - inside the container, indexing uses `/app/external/revogrid` and `/app/external/revogrid-pro`
+- if you change `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `POSTGRES_DB` after the database has already started once, recreate the Docker volume with `docker compose down -v` before retrying
+- your `.env` file must be plain `KEY=value` lines only; any extra text on the first line will cause `docker compose` to reject the file
 
 ### Traefik support
 
@@ -438,7 +563,6 @@ Good manual test queries:
 - `pnpm test` runs Vitest
 - `pnpm lint` runs ESLint
 - `pnpm reindex` rebuilds the real catalog artifact and optionally persists it
-- `pnpm seed` aliases the same real ingestion flow for compatibility
 - `pnpm backfill:symbols` enriches a generated artifact with additional derived symbols
 
 ## Future Pro/private sources

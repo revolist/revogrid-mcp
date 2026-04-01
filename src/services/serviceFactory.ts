@@ -26,7 +26,16 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
 async function createContentRepository(config: AppConfig): Promise<ContentRepository> {
   if (config.CONTENT_BACKEND === 'postgres') {
     const { Pool } = await import('pg');
-    return new PostgresContentRepository(new Pool({ connectionString: config.DATABASE_URL }), config.PGVECTOR_TABLE);
+    return new PostgresContentRepository(
+      new Pool({
+        host: config.POSTGRES_HOST,
+        port: config.POSTGRES_PORT,
+        database: config.POSTGRES_DB,
+        user: config.POSTGRES_USER,
+        password: config.POSTGRES_PASSWORD
+      }),
+      config.PGVECTOR_TABLE,
+    );
   }
 
   return new InMemoryContentRepository(await buildCatalogDataset());

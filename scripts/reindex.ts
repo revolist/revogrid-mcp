@@ -54,7 +54,13 @@ export async function runReindex(): Promise<void> {
   );
 
   if (config.CONTENT_BACKEND === 'postgres') {
-    const pool = new Pool({ connectionString: config.DATABASE_URL });
+    const pool = new Pool({
+      host: config.POSTGRES_HOST,
+      port: config.POSTGRES_PORT,
+      database: config.POSTGRES_DB,
+      user: config.POSTGRES_USER,
+      password: config.POSTGRES_PASSWORD
+    });
 
     try {
       await saveCatalogDataset(pool, config.PGVECTOR_TABLE, dataset);
