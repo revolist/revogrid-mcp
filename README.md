@@ -263,7 +263,7 @@ Notes:
 - Docker Compose mounts your local source repos read-only into the container
 - by default it expects sibling paths `../revogrid` and `../revogrid-pro`
 - override those with `LOCAL_REVOGRID_SOURCE_PATH` and `LOCAL_REVOGRID_PRO_SOURCE_PATH` in `.env` if needed
-- inside the container, indexing uses `/app/external-sources/revogrid` and `/app/external-sources/revogrid-pro`
+- inside the container, indexing uses `/app/external/revogrid` and `/app/external/revogrid-pro`
 
 ### Traefik support
 
