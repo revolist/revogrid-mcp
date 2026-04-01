@@ -3,14 +3,59 @@ services:
     image: pgvector/pgvector:pg16
     container_name: revogrid-mcp-postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: revogrid_mcp
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - '5432:5432'
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  app:
+    image: ghcr.io/revolist/revogrid-mcp:latest
+    container_name: revogrid-mcp-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/revogrid_mcp
+    depends_on:
+      - postgres
+    ports:
+      - '${APP_PUBLISHED_PORT:-8787}:8787'
+    volumes:
+      - ./data:/app/data
+    labels:
+      traefik.enable: ${TRAEFIK_ENABLE:-false}
+      traefik.http.routers.revogrid-mcp.rule: Host(`${TRAEFIK_HOST:-revogrid-mcp.localhost}`)
+      traefik.http.routers.revogrid-mcp.entrypoints: ${TRAEFIK_ENTRYPOINTS:-web}
+      traefik.http.routers.revogrid-mcp.service: revogrid-mcp
+      traefik.http.services.revogrid-mcp.loadbalancer.server.port: '8787'
+      traefik.http.routers.revogrid-mcp.tls: ${TRAEFIK_TLS:-false}
+    command: pnpm start
+
+  reindex:
+    image: ghcr.io/revolist/revogrid-mcp:latest
+    profiles: ['jobs']
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/revogrid_mcp
+    depends_on:
+      - postgres
+    volumes:
+      - ./data:/app/data
+    command: pnpm reindex
+
+  seed:
+    image: ghcr.io/revolist/revogrid-mcp:latest
+    profiles: ['jobs']
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/revogrid_mcp
+    depends_on:
+      - postgres
+    volumes:
+      - ./data:/app/data
+    command: pnpm seed
 
 volumes:
   postgres_data:

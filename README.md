@@ -229,6 +229,68 @@ pnpm reindex
 pnpm dev
 ```
 
+### Docker Compose commands
+
+Start Postgres only:
+
+```bash
+docker compose up -d postgres
+```
+
+Build and start the MCP server container:
+
+```bash
+docker compose up -d app
+```
+
+Run reindex as a one-off container job:
+
+```bash
+docker compose --profile jobs run --rm reindex
+```
+
+Run seed as a one-off container job:
+
+```bash
+docker compose --profile jobs run --rm seed
+```
+
+Notes:
+
+- `seed` is an alias for the same real ingestion flow as `reindex`
+- `data/catalog.json` is written to the local `./data` folder through a bind mount
+- inside Docker Compose, `DATABASE_URL` is automatically pointed at the `postgres` service
+
+### Traefik support
+
+The `app` service includes optional Traefik labels controlled by `.env`.
+
+To enable Traefik routing:
+
+```bash
+TRAEFIK_ENABLE=true
+TRAEFIK_HOST=revogrid-mcp.localhost
+TRAEFIK_ENTRYPOINTS=web
+TRAEFIK_TLS=false
+```
+
+Then start the app:
+
+```bash
+docker compose up -d app
+```
+
+With those settings, Traefik can route requests like:
+
+- `http://revogrid-mcp.localhost/health`
+- `http://revogrid-mcp.localhost/mcp`
+
+Notes:
+
+- direct port publishing still works through `APP_PUBLISHED_PORT`
+- if your Traefik setup uses a shared external Docker network, attach this service to that network in your local compose override
+- if you need TLS cert resolvers or middleware chains, add those labels in your deployment-specific compose override
+
 ## MCP connection URL
 
 - MCP endpoint: `http://localhost:8787/mcp`
