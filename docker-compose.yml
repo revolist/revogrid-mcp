@@ -16,12 +16,14 @@ services:
       - .env
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/revogrid_mcp
+      REVOGRID_SOURCE_ROOT: /app/external-sources/revogrid
+      REVOGRID_PRO_SOURCE_ROOT: /app/external-sources/revogrid-pro
     depends_on:
       - postgres
-    ports:
-      - '${APP_PUBLISHED_PORT:-8787}:8787'
     volumes:
       - ./data:/app/data
+      - ${LOCAL_REVOGRID_SOURCE_PATH:-./revogrid}:/app/external-sources/revogrid:ro
+      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-./revogrid-pro}:/app/external-sources/revogrid-pro:ro
     labels:
       traefik.enable: ${TRAEFIK_ENABLE:-false}
       traefik.http.routers.revogrid-mcp.rule: Host(`${TRAEFIK_HOST:-revogrid-mcp.localhost}`)
@@ -38,10 +40,14 @@ services:
       - .env
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/revogrid_mcp
+      REVOGRID_SOURCE_ROOT: /app/external-sources/revogrid
+      REVOGRID_PRO_SOURCE_ROOT: /app/external-sources/revogrid-pro
     depends_on:
       - postgres
     volumes:
       - ./data:/app/data
+      - ${LOCAL_REVOGRID_SOURCE_PATH:-../revogrid}:/app/external-sources/revogrid:ro
+      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-../revogrid-pro}:/app/external-sources/revogrid-pro:ro
     command: pnpm reindex
 
   seed:
@@ -51,10 +57,14 @@ services:
       - .env
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/revogrid_mcp
+      REVOGRID_SOURCE_ROOT: /app/external-sources/revogrid
+      REVOGRID_PRO_SOURCE_ROOT: /app/external-sources/revogrid-pro
     depends_on:
       - postgres
     volumes:
       - ./data:/app/data
+      - ${LOCAL_REVOGRID_SOURCE_PATH:-../revogrid}:/app/external-sources/revogrid:ro
+      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-../revogrid-pro}:/app/external-sources/revogrid-pro:ro
     command: pnpm seed
 
 volumes:

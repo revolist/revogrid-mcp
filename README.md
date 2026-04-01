@@ -260,6 +260,10 @@ Notes:
 - `seed` is an alias for the same real ingestion flow as `reindex`
 - `data/catalog.json` is written to the local `./data` folder through a bind mount
 - inside Docker Compose, `DATABASE_URL` is automatically pointed at the `postgres` service
+- Docker Compose mounts your local source repos read-only into the container
+- by default it expects sibling paths `../revogrid` and `../revogrid-pro`
+- override those with `LOCAL_REVOGRID_SOURCE_PATH` and `LOCAL_REVOGRID_PRO_SOURCE_PATH` in `.env` if needed
+- inside the container, indexing uses `/app/external-sources/revogrid` and `/app/external-sources/revogrid-pro`
 
 ### Traefik support
 
