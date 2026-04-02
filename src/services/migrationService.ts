@@ -37,7 +37,7 @@ export class DefaultMigrationService implements MigrationService {
         (candidate) =>
           normalizeVersion(candidate.fromVersion) === source &&
           normalizeVersion(candidate.toVersion) === target &&
-          (!candidate.framework || candidate.framework === options.framework),
+          frameworkMatches(candidate.framework, options.framework),
       ) ?? null;
 
     const resolvedMigration =
@@ -110,7 +110,7 @@ function selectClosestMigration(
   framework?: Framework,
 ): MigrationNoteRecord | null {
   const ranked = migrations
-    .filter((candidate) => !candidate.framework || candidate.framework === framework)
+    .filter((candidate) => frameworkMatches(candidate.framework, framework))
     .map((candidate) => ({
       candidate,
       score: getMigrationCompatibilityScore(candidate, fromVersion, toVersion)
@@ -134,6 +134,17 @@ function getMigrationCompatibilityScore(
   }
 
   return fromScore * 10 + toScore;
+}
+
+function frameworkMatches(
+  candidateFramework: Framework | undefined,
+  requestedFramework: Framework | undefined,
+): boolean {
+  if (!requestedFramework) {
+    return true;
+  }
+
+  return !candidateFramework || candidateFramework === requestedFramework;
 }
 
 function getVersionCompatibilityScore(candidateVersion: string, requestedVersion: string): number {

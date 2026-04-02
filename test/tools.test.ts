@@ -312,6 +312,63 @@ describe('MCP tool handlers', () => {
     expect(intraMajorUpgrade.recommendedDocs[0]?.title).toBe('V4 Migration Guide');
   });
 
+  it('allows framework-specific migration records to satisfy framework-agnostic requests', async () => {
+    const services = createTestServices({
+      chunks: [
+        {
+          id: 'migration-v4-guide',
+          title: 'V4 Migration Guide',
+          body: 'Updated event names. beforeEdit -> beforeedit.',
+          summary: 'Migration notes for the 4.x release line.',
+          framework: 'react',
+          surface: 'migration',
+          docType: 'migration',
+          version: '4.20.1',
+          requiresPro: false,
+          symbols: ['beforeedit'],
+          stability: 'stable',
+          url: 'https://rv-grid.com/guide/migrations/v4'
+        }
+      ],
+      versions: [],
+      features: [],
+      migrations: [
+        {
+          id: 'migration-3x-to-4x-react',
+          fromVersion: '3.x',
+          toVersion: '4.x',
+          framework: 'react',
+          breakingChanges: ['Updated event names to lowercase.'],
+          renamedSymbols: [
+            {
+              from: 'beforeEdit',
+              to: 'beforeedit'
+            }
+          ],
+          changedDefaults: [],
+          packageChanges: ['Upgrade revogrid packages to the 4.x release line.'],
+          recommendedDocIds: ['migration-v4-guide'],
+          recommendedExampleIds: []
+        }
+      ]
+    });
+
+    const result = await handleGetMigrationNotes(
+      {
+        fromVersion: '3.0.0',
+        toVersion: '4.0.0'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+
+    expect(result.renamedSymbols).toContainEqual({
+      from: 'beforeEdit',
+      to: 'beforeedit'
+    });
+    expect(result.recommendedDocs[0]?.id).toBe('migration-v4-guide');
+  });
+
   it('returns empty migration arrays when the version pair is unknown', async () => {
     const result = await handleGetMigrationNotes(
       {
