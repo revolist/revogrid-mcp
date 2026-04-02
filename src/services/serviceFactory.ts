@@ -16,8 +16,8 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
 
 export function createServicesForRepository(contentRepository: ContentRepository): AppServices {
   const searchService = new DefaultRevogridSearchService(contentRepository);
-  const featureService = new DefaultFeatureMatrixService(contentRepository, searchService);
-  const migrationService = new DefaultMigrationService(contentRepository, searchService);
+  const featureService = new DefaultFeatureMatrixService(contentRepository);
+  const migrationService = new DefaultMigrationService(contentRepository);
 
   return {
     contentRepository,

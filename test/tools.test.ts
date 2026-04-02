@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { SeedDataset } from '@revogrid-mcp/content-model';
 import { buildSeedDataset } from '@revogrid-mcp/ingestion';
 
 import { handleFindExamples } from '../src/mcp/tools/findExamples.js';
@@ -11,15 +12,15 @@ import { DefaultFeatureMatrixService } from '../src/services/featureService.js';
 import { DefaultMigrationService } from '../src/services/migrationService.js';
 import { DefaultRevogridSearchService } from '../src/services/searchService.js';
 
-function createTestServices() {
-  const repository = new InMemoryContentRepository(buildSeedDataset());
+function createTestServices(dataset: SeedDataset = buildSeedDataset()) {
+  const repository = new InMemoryContentRepository(dataset);
   const searchService = new DefaultRevogridSearchService(repository);
 
   return {
     contentRepository: repository,
     searchService,
-    featureService: new DefaultFeatureMatrixService(repository, searchService),
-    migrationService: new DefaultMigrationService(repository, searchService)
+    featureService: new DefaultFeatureMatrixService(repository),
+    migrationService: new DefaultMigrationService(repository)
   };
 }
 
@@ -156,6 +157,159 @@ describe('MCP tool handlers', () => {
       from: 'beforeEdit',
       to: 'beforeedit'
     });
+  });
+
+  it('falls back to symbol and title metadata when a feature is not precomputed', async () => {
+    const services = createTestServices({
+      chunks: [
+        {
+          id: 'guide-sorting',
+          title: 'Sorting',
+          body: 'Sorting supports multiple columns and sorting lifecycle events.',
+          summary: 'Sorting guide.',
+          framework: 'vanilla',
+          surface: 'core',
+          docType: 'guide',
+          version: '5.2.0',
+          requiresPro: false,
+          symbols: ['SortingPlugin', 'sorting'],
+          stability: 'stable',
+          url: 'https://rv-grid.com/guide/sorting'
+        },
+        {
+          id: 'api-column-grouping',
+          title: 'Interface: ColumnGrouping<T>',
+          body: 'ColumnGrouping defines grouped column headers.',
+          summary: 'Column grouping API.',
+          framework: 'vanilla',
+          surface: 'core',
+          docType: 'api',
+          version: '5.2.0',
+          requiresPro: false,
+          symbols: ['ColumnGrouping'],
+          stability: 'stable',
+          url: 'https://rv-grid.com/guide/types/Interface.ColumnGrouping'
+        },
+        {
+          id: 'plugin-tree-data',
+          title: 'Tree data plugin',
+          body: 'TreeDataPlugin enables hierarchical row expansion.',
+          summary: 'Tree data plugin guide.',
+          framework: 'vanilla',
+          surface: 'plugin',
+          docType: 'guide',
+          version: '5.2.0',
+          requiresPro: true,
+          symbols: ['TreeDataPlugin'],
+          stability: 'stable',
+          url: 'https://pro.rv-grid.com/plugins/tree-data'
+        }
+      ],
+      versions: [],
+      features: [],
+      migrations: []
+    });
+
+    const sorting = await handleResolveFeatureMatrix(
+      {
+        featureName: 'sorting'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+    const columnGrouping = await handleResolveFeatureMatrix(
+      {
+        featureName: 'ColumnGrouping'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+    const treeData = await handleResolveFeatureMatrix(
+      {
+        featureName: 'TreeDataPlugin'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+
+    expect(sorting.supported).toBe(true);
+    expect(sorting.featureName).toBe('sorting');
+    expect(sorting.bestDocs[0]?.id).toBe('guide-sorting');
+    expect(columnGrouping.supported).toBe(true);
+    expect(columnGrouping.featureName).toBe('ColumnGrouping');
+    expect(columnGrouping.bestDocs[0]?.id).toBe('api-column-grouping');
+    expect(treeData.supported).toBe(true);
+    expect(treeData.requiresPro).toBe(true);
+    expect(treeData.bestDocs).toEqual([]);
+  });
+
+  it('returns closest migration notes for matching release lines when no exact pair exists', async () => {
+    const services = createTestServices({
+      chunks: [
+        {
+          id: 'migration-v4-guide',
+          title: 'V4 Migration Guide',
+          body: 'Updated event names. beforeEdit -> beforeedit.',
+          summary: 'Migration notes for the 4.x release line.',
+          framework: 'vanilla',
+          surface: 'migration',
+          docType: 'migration',
+          version: '4.20.1',
+          requiresPro: false,
+          symbols: ['beforeedit'],
+          stability: 'stable',
+          url: 'https://rv-grid.com/guide/migrations/v4'
+        }
+      ],
+      versions: [],
+      features: [],
+      migrations: [
+        {
+          id: 'migration-3x-to-4x',
+          fromVersion: '3.x',
+          toVersion: '4.x',
+          breakingChanges: ['Updated event names to lowercase.'],
+          renamedSymbols: [
+            {
+              from: 'beforeEdit',
+              to: 'beforeedit'
+            }
+          ],
+          changedDefaults: [],
+          packageChanges: ['Upgrade revogrid packages to the 4.x release line.'],
+          recommendedDocIds: ['migration-v4-guide'],
+          recommendedExampleIds: []
+        }
+      ]
+    });
+
+    const directUpgrade = await handleGetMigrationNotes(
+      {
+        fromVersion: '3.0.0',
+        toVersion: '4.0.0'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+    const intraMajorUpgrade = await handleGetMigrationNotes(
+      {
+        fromVersion: '4.0.0',
+        toVersion: '4.1.0'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+
+    expect(directUpgrade.renamedSymbols).toContainEqual({
+      from: 'beforeEdit',
+      to: 'beforeedit'
+    });
+    expect(directUpgrade.recommendedDocs[0]?.id).toBe('migration-v4-guide');
+    expect(intraMajorUpgrade.renamedSymbols).toContainEqual({
+      from: 'beforeEdit',
+      to: 'beforeedit'
+    });
+    expect(intraMajorUpgrade.recommendedDocs[0]?.title).toBe('V4 Migration Guide');
   });
 
   it('returns empty migration arrays when the version pair is unknown', async () => {
