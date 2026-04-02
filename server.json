@@ -6,7 +6,7 @@
   "status": "active",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/revolist/revogrid-mcp",
+    "url": "https://github.com/revolist/revogrid",
     "source": "github"
   },
   "homepage": "https://mcp.rv-grid.com",
