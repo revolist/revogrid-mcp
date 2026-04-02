@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "description": "Hosted MCP server for structured RevoGrid knowledge retrieval.",
+  "homepage": "https://mcp.rv-grid.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/revolist/revogrid-mcp.git"
+  },
   "packageManager": "pnpm@10.4.1",
   "type": "module",
   "main": "dist/index.js",

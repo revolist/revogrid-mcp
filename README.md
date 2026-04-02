@@ -80,6 +80,8 @@ Expected response:
 
 Default local base URL: `http://localhost:8787`
 
+Hosted public base URL: `https://mcp.rv-grid.com`
+
 ## What is included
 
 - Streamable HTTP MCP endpoint at `/` for community docs only
@@ -109,6 +111,7 @@ Default local base URL: `http://localhost:8787`
 ## Install in AI clients
 
 Once the server is running locally, use `http://localhost:8787`.
+For the hosted public deployment, use `https://mcp.rv-grid.com`.
 
 ### Claude Code
 
