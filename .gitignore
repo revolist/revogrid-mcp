@@ -10,3 +10,4 @@ test/*.d.ts
 test/*.d.ts.map
 data/*.json
 !data/.gitkeep
+.mcpregistry*
