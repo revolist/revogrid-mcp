@@ -12,6 +12,7 @@ import { FilteredContentRepository } from '../repositories/filteredContentReposi
 import { createServicesForRepository } from '../services/serviceFactory.js';
 import { registerSecurityHooks } from './middleware/security.js';
 import type { AppServices } from '../types/catalog.js';
+import { runReindex } from '../services/reindexService.js';
 
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = createLogger(config.LOG_LEVEL);
@@ -99,6 +100,34 @@ export function createApp(config: AppConfig, services: AppServices) {
     method: ['GET', 'POST', 'DELETE'],
     url: '/pro',
     handler: (request, reply) => mcpHandler(request, reply, services, resolveProRequestContext)
+  });
+  
+  app.post('/hooks/reindex', async (request, reply) => {
+    const token = request.headers['x-webhook-token'];
+    
+    if (!token || token !== config.WEBHOOK_TOKEN) {
+      void reply.status(401).send({ error: 'Unauthorized: Invalid or missing webhook token' });
+      return;
+    }
+
+    try {
+      const { dataset, summary } = await runReindex();
+      
+      // Update both public and private repositories if applicable
+      // In this setup, services.contentRepository is the root content repository
+      services.contentRepository.updateDataset(dataset);
+      
+      return {
+        status: 'success',
+        message: 'Re-indexing completed successfully',
+        summary
+      };
+    } catch (error) {
+      logger.error('reindex_hook_failed', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+      void reply.status(500).send({ error: 'Re-indexing failed' });
+    }
   });
 
   app.setErrorHandler((error, _request, reply) => {

@@ -236,6 +236,32 @@ If the client cannot attach headers directly, place the MCP server behind your o
 
 Do not share the raw signing secret with end users or rely on manually supplied Pro headers in production.
 
+## External Re-indexing Webhook
+
+The MCP server provides a protected webhook to trigger a documentation re-indexing from external systems (like GitHub Actions). When triggered, the server rebuilds the catalog and updates its internal storage (In-Memory or Postgres) without requiring a restart.
+
+- **Endpoint**: `POST /hooks/reindex`
+- **Authentication**: Requires `X-Webhook-Token: <your-token>` header
+
+### Example Trigger
+
+```bash
+curl -X POST http://localhost:8787/hooks/reindex \
+     -H "X-Webhook-Token: dev-webhook-token"
+```
+
+The response includes a summary of the indexing process, including file counts and categorization.
+
+### Token Generation
+
+You can generate a secure `WEBHOOK_TOKEN` based on your existing `AUTH_JWT_SECRET` using the included helper script. This ensures you only need to manage one secret:
+
+```bash
+pnpm derive:token
+```
+
+If `WEBHOOK_TOKEN` is not explicitly set in your environment, the server will automatically derive it from `AUTH_JWT_SECRET` if it is present. This makes it easy to maintain consistent security between your Pro routes and the re-indexing hook.
+
 ## Good prompts for agents
 
 These work well in Codex, Cursor, Claude Code, or other MCP-capable clients.
@@ -374,6 +400,11 @@ Copy `.env.example` to `.env` and adjust only what you need.
 - `AUTH_JWT_SECRET`
   Shared secret used to verify incoming `HS256` JWT bearer tokens.
   Used only when `ENABLE_PRO_ROUTE_AUTH=true`.
+
+- `WEBHOOK_TOKEN`
+  Secret token required to trigger the `/hooks/reindex` webhook.
+  Default: `dev-webhook-token`
+  Pass this token in the `X-Webhook-Token` header.
 
 ### Docker Compose and local container wiring
 

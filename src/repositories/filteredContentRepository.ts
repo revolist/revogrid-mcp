@@ -2,6 +2,7 @@ import type {
   DocumentChunk,
   FeatureRecord,
   MigrationNoteRecord,
+  SeedDataset,
   VersionRecord
 } from '@revogrid-mcp/content-model';
 
@@ -14,6 +15,10 @@ export class FilteredContentRepository implements ContentRepository {
     private readonly repository: ContentRepository,
     private readonly chunkFilter: ChunkFilter,
   ) {}
+
+  public updateDataset(dataset: SeedDataset): void {
+    this.repository.updateDataset(dataset);
+  }
 
   public async getChunks(): Promise<DocumentChunk[]> {
     return this.getVisibleChunks();

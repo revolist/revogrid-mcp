@@ -2,6 +2,7 @@ import type {
   DocumentChunk,
   FeatureRecord,
   MigrationNoteRecord,
+  SeedDataset,
   VersionRecord
 } from '@revogrid-mcp/content-model';
 import type { Pool } from 'pg';
@@ -10,6 +11,10 @@ import type { ContentRepository } from './contentRepository.js';
 
 export class PostgresContentRepository implements ContentRepository {
   private readonly safeTableName: string;
+
+  public updateDataset(_dataset: SeedDataset): void {
+    // Postgres updates are handled during re-indexing, so no action needed here.
+  }
 
   public constructor(
     private readonly pool: Pool,

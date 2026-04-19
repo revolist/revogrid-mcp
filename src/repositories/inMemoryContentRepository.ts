@@ -9,7 +9,11 @@ import type {
 import type { ContentRepository } from './contentRepository.js';
 
 export class InMemoryContentRepository implements ContentRepository {
-  public constructor(private readonly dataset: SeedDataset) {}
+  public constructor(private dataset: SeedDataset) {}
+
+  public updateDataset(dataset: SeedDataset): void {
+    this.dataset = dataset;
+  }
 
   public getChunks(): Promise<DocumentChunk[]> {
     return Promise.resolve(this.dataset.chunks);
