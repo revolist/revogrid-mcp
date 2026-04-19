@@ -12,3 +12,4 @@ export * from './sources/changelog.js';
 export * from './sources/docs.js';
 export * from './sources/examples.js';
 export * from './sources/types.js';
+export * from './storage/saveChunks.js';
