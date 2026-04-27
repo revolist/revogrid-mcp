@@ -1,9 +1,9 @@
 import type { DocumentChunk } from '@revogrid-mcp/content-model';
 import { embedChunks } from '@revogrid-mcp/ingestion';
-import { tokenize } from '@revogrid-mcp/shared';
 
 import type { SearchMatch, SearchQueryFilters } from '../types/catalog.js';
 import { filterChunks } from './keywordSearch.js';
+import { analyzeQuery, scoreIntentBoost, type SearchIntent, tokenizeForSearch } from './queryAnalysis.js';
 import { compareSearchMatches } from './rerank.js';
 
 function cosineSimilarity(left: number[], right: number[]): number {
@@ -30,8 +30,10 @@ export function vectorSearch(
   query: string,
   chunks: DocumentChunk[],
   filters: SearchQueryFilters,
+  searchIntent: SearchIntent = 'docs',
 ): SearchMatch[] {
   const scopedChunks = filterChunks(chunks, filters);
+  const analysis = analyzeQuery(query, searchIntent);
   const queryChunk: DocumentChunk = {
     id: 'query',
     title: query,
@@ -40,7 +42,7 @@ export function vectorSearch(
     surface: filters.surface ?? 'core',
     docType: 'guide',
     requiresPro: false,
-    symbols: tokenize(query),
+    symbols: tokenizeForSearch(query),
     framework: filters.framework,
     version: filters.version,
     url: 'https://rv-grid.com/search/query'
@@ -58,11 +60,12 @@ export function vectorSearch(
       }
 
       const score = cosineSimilarity(queryVector, embeddedChunk.vector);
+      const intentBoost = scoreIntentBoost(chunk, analysis, filters);
 
       return {
         chunk,
-        score,
-        whyMatched: 'semantic similarity'
+        score: score + intentBoost.score / 20,
+        whyMatched: ['semantic similarity', ...intentBoost.reasons].join('; ')
       };
     })
     .filter((match): match is SearchMatch => Boolean(match && match.score > 0))

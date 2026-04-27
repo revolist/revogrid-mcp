@@ -56,6 +56,33 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridRoot,
+        'docs/guide/angular/_examples.md',
+        [
+          '# Examples',
+          '',
+          'Angular wrapper setup examples.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'docs/guide/parts/framework.md',
+        [
+          '# Framework',
+          '',
+          'Shared framework notes mention React, Vue, Angular, and Svelte together.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'docs/guide/pro-mention.md',
+        [
+          '# Public Pro Mention',
+          '',
+          'This public comparison mentions the Pro version, commercial licensing, and @revolist/revogrid-pro as adjacent context.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
         'docs/guide/migrations/v4.md',
         [
           '# Migration Guide',
@@ -201,6 +228,37 @@ describe.sequential('buildCatalogDataset', () => {
     expect(pivotDemo).toMatchObject({
       surface: 'pivot',
       requiresPro: true
+    });
+  });
+
+  it('uses path metadata for framework detection and cleans weak titles', async () => {
+    const dataset = await buildCatalogDataset();
+    const angularExamples = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid/docs/guide/angular/_examples.md',
+    );
+    const sharedFramework = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid/docs/guide/parts/framework.md',
+    );
+
+    expect(angularExamples).toMatchObject({
+      title: 'Angular Examples',
+      framework: 'angular'
+    });
+    expect(sharedFramework).toMatchObject({
+      title: 'Framework Integration Guide',
+      framework: undefined
+    });
+  });
+
+  it('does not mark public comparison prose as pro-only from incidental pro mentions', async () => {
+    const dataset = await buildCatalogDataset();
+    const publicMention = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid/docs/guide/pro-mention.md',
+    );
+
+    expect(publicMention).toMatchObject({
+      surface: 'core',
+      requiresPro: false
     });
   });
 

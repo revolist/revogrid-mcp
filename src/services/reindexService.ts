@@ -15,7 +15,10 @@ import { Pool } from 'pg';
 
 import { loadConfig } from '../config/env.js';
 
-export async function runReindex(): Promise<{ dataset: SeedDataset; summary: any }> {
+type SourceInventory = Record<'docs' | 'examples' | 'changelog' | 'api', Awaited<ReturnType<typeof getDocsSources>>>;
+type IndexSummary = ReturnType<typeof buildIndexSummary>;
+
+export async function runReindex(): Promise<{ dataset: SeedDataset; summary: IndexSummary }> {
   const config = loadConfig(process.env);
   const absolutePath = path.resolve(process.cwd(), config.REINDEX_OUTPUT);
   const [docs, examples, changelog, api, dataset] = await Promise.all([
@@ -72,7 +75,7 @@ export async function runReindex(): Promise<{ dataset: SeedDataset; summary: any
 }
 
 function buildIndexSummary(
-  sourceInventory: Record<'docs' | 'examples' | 'changelog' | 'api', Awaited<ReturnType<typeof getDocsSources>>>,
+  sourceInventory: SourceInventory,
   chunks: DocumentChunk[],
   absolutePath: string,
   persistedToPostgres: boolean,

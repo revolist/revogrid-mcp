@@ -14,7 +14,7 @@ export class DefaultRevogridSearchService implements RevogridSearchService {
     filters: SearchQueryFilters,
   ): Promise<SearchMatch[]> {
     const chunks = await this.repository.getChunks();
-    return hybridSearch(query, chunks, filters);
+    return hybridSearch(query, chunks, filters, 'docs');
   }
 
   public async findExamples(
@@ -25,6 +25,6 @@ export class DefaultRevogridSearchService implements RevogridSearchService {
       (chunk) => chunk.docType === 'example' || chunk.docType === 'live-demo',
     );
 
-    return hybridSearch(query, chunks, filters);
+    return hybridSearch(query, chunks, filters, 'examples');
   }
 }

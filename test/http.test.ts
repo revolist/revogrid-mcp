@@ -1,3 +1,4 @@
+import { Socket } from 'node:net';
 import { Duplex } from 'node:stream';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -9,6 +10,22 @@ import { createServices } from '../src/services/serviceFactory.js';
 
 if (typeof Duplex.prototype.destroySoon !== 'function') {
   Duplex.prototype.destroySoon = Duplex.prototype.destroy;
+}
+
+if (typeof Socket.prototype.destroySoon !== 'function') {
+  Socket.prototype.destroySoon = Socket.prototype.destroy;
+}
+
+if (!Object.prototype.hasOwnProperty.call(Object.prototype, 'destroySoon')) {
+  Object.defineProperty(Object.prototype, 'destroySoon', {
+    configurable: true,
+    enumerable: false,
+    value() {
+      if (typeof this.destroy === 'function') {
+        this.destroy();
+      }
+    }
+  });
 }
 
 const initializePayload = {

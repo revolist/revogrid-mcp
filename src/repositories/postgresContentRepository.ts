@@ -12,7 +12,8 @@ import type { ContentRepository } from './contentRepository.js';
 export class PostgresContentRepository implements ContentRepository {
   private readonly safeTableName: string;
 
-  public updateDataset(_dataset: SeedDataset): void {
+  public updateDataset(dataset: SeedDataset): void {
+    void dataset;
     // Postgres updates are handled during re-indexing, so no action needed here.
   }
 

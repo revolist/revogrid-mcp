@@ -27,7 +27,7 @@ function createTestServices(dataset: SeedDataset = buildSeedDataset()) {
 describe('MCP tool handlers', () => {
   const services = createTestServices();
 
-  it('searches docs for editable React grid', async () => {
+  it('searches docs for editable React grid guides before examples', async () => {
     const result = await handleSearchRevogridDocs(
       {
         query: 'editable React grid',
@@ -37,7 +37,7 @@ describe('MCP tool handlers', () => {
       { entitlement: 'anonymous' },
     );
 
-    expect(result.results[0]?.id).toBe('example-react-editable-grid');
+    expect(result.results[0]?.id).toBe('guide-react-getting-started');
   });
 
   it('keeps anonymous search results free of pro chunks even when requiresPro is requested', async () => {

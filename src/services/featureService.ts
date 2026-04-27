@@ -64,7 +64,7 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
       };
     }
 
-    const fallback = await this.resolveFeatureFromSearch(featureName, chunks, filters);
+    const fallback = this.resolveFeatureFromSearch(featureName, chunks, filters);
     if (!fallback) {
       return {
         feature: null,
@@ -99,11 +99,11 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
       .slice(0, filters.limit);
   }
 
-  private async resolveFeatureFromSearch(
+  private resolveFeatureFromSearch(
     featureName: string,
     chunks: DocumentChunk[],
     filters: SearchQueryFilters,
-  ): Promise<FeatureResolution | null> {
+  ): FeatureResolution | null {
     const normalizedName = normalizeText(featureName);
     const candidates = filterChunksForMetadata(chunks, filters)
       .map((chunk) => ({

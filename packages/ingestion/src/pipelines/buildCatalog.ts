@@ -96,14 +96,15 @@ async function normalizeSourceFile(
   const typeInstructions = shouldExtractTypeInstructions(source, extension)
     ? extractTypeInstructionDocument(resolvedContent)
     : null;
-  const title =
+  const rawTitle =
     attributes.title ??
     typeInstructions?.title ??
     extractFirstHeading(body) ??
     humanizePath(source.relativePath);
-  const framework = detectFramework(source.relativePath, title, resolvedContent);
-  const surface = detectSurface(source, title, resolvedContent);
   const docType = detectDocType(source.category, source.relativePath, extension);
+  const title = cleanTitle(rawTitle, source, docType);
+  const framework = detectFramework(source.relativePath, title);
+  const surface = detectSurface(source, title, resolvedContent);
   const requiresPro = inferRequiresPro(source, title, resolvedContent, surface);
   const plainBody = normalizeBody(body, extension, typeInstructions);
   if (!plainBody) {
@@ -325,26 +326,65 @@ function humanizePath(relativePath: string): string {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function detectFramework(relativePath: string, title: string, content: string): DocumentChunk['framework'] {
-  const value = `${relativePath} ${title} ${content}`.toLowerCase();
+function cleanTitle(
+  rawTitle: string,
+  source: SourceFile,
+  docType: DocumentChunk['docType'],
+): string {
+  const title = rawTitle.replace(/\s+/g, ' ').trim();
+  const normalizedTitle = normalizeText(title);
+  if (!['framework', 'examples', 'example', 'installation', 'getting started'].includes(normalizedTitle)) {
+    return title;
+  }
 
-  if (value.includes('react')) {
+  const normalizedPath = source.relativePath.replace(/\\/g, '/');
+  const segments = normalizedPath.split('/').filter(Boolean);
+  const parent = segments.at(-2);
+  const parentTitle = parent ? humanizePath(parent) : '';
+
+  if (normalizedTitle === 'examples' || normalizedTitle === 'example') {
+    return parentTitle ? `${parentTitle} Examples` : `${docType === 'live-demo' ? 'Demo' : 'Code'} Examples`;
+  }
+
+  if (normalizedTitle === 'framework') {
+    return parentTitle && parentTitle !== 'Parts' ? `${parentTitle} Framework Guide` : 'Framework Integration Guide';
+  }
+
+  if (normalizedTitle === 'installation' || normalizedTitle === 'getting started') {
+    return parentTitle ? `${parentTitle} ${title}` : title;
+  }
+
+  return title;
+}
+
+function detectFramework(relativePath: string, title: string): DocumentChunk['framework'] {
+  const normalizedPath = relativePath.replace(/\\/g, '/').toLowerCase();
+  const value = `${normalizedPath} ${title}`.toLowerCase();
+
+  if (hasFrameworkSignal(value, normalizedPath, 'react')) {
     return 'react';
   }
-  if (value.includes('vue')) {
+  if (hasFrameworkSignal(value, normalizedPath, 'vue') || normalizedPath.includes('vue3') || normalizedPath.includes('vue2')) {
     return 'vue';
   }
-  if (value.includes('angular')) {
+  if (hasFrameworkSignal(value, normalizedPath, 'angular')) {
     return 'angular';
   }
-  if (value.includes('svelte')) {
+  if (hasFrameworkSignal(value, normalizedPath, 'svelte')) {
     return 'svelte';
   }
-  if (value.includes('/js/') || value.includes('javascript') || value.includes('standalone')) {
+  if (normalizedPath.includes('/js/') || normalizedPath.includes('/jsx/') || value.includes('javascript') || value.includes('standalone')) {
     return 'vanilla';
   }
 
   return undefined;
+}
+
+function hasFrameworkSignal(value: string, normalizedPath: string, framework: string): boolean {
+  return (
+    new RegExp(`(^|[/._-])${framework}($|[/._-])`).test(normalizedPath) ||
+    new RegExp(`\\b${framework}\\b`).test(value)
+  );
 }
 
 function detectSurface(source: SourceFile, title: string, content: string): DocumentChunk['surface'] {
@@ -362,7 +402,7 @@ function detectSurface(source: SourceFile, title: string, content: string): Docu
   if (value.includes('column-type') || value.includes('column type')) {
     return 'columntype';
   }
-  if (source.repository === 'revogrid-pro' || value.includes('revogrid-pro')) {
+  if (source.repository === 'revogrid-pro') {
     return 'pro';
   }
 
@@ -396,16 +436,18 @@ function inferRequiresPro(
   content: string,
   surface: DocumentChunk['surface'],
 ): boolean {
-  const value = `${source.relativePath} ${title} ${content}`.toLowerCase();
+  const normalizedPath = source.relativePath.replace(/\\/g, '/').toLowerCase();
+  const value = `${normalizedPath} ${title} ${content}`.toLowerCase();
 
-  return (
-    source.requiresPro ||
-    source.repository === 'revogrid-pro' ||
-    surface === 'pivot' ||
-    value.includes('@revolist/revogrid-pro') ||
-    value.includes('pro version') ||
-    value.includes('commercial')
-  );
+  if (source.requiresPro || source.repository === 'revogrid-pro' || surface === 'pivot') {
+    return true;
+  }
+
+  if (normalizedPath.includes('.pro.') || normalizedPath.includes('/pro/')) {
+    return true;
+  }
+
+  return value.includes('@revolist/revogrid-pro') && (source.category === 'examples' || source.category === 'api');
 }
 
 function detectVersion(source: SourceFile, packageVersions: PackageVersions): string {

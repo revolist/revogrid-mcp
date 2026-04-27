@@ -1,9 +1,15 @@
 import type { DocumentChunk } from '@revogrid-mcp/content-model';
 import { canAccessChunk, normalizeVersion } from '@revogrid-mcp/content-model';
-import { normalizeText, tokenize } from '@revogrid-mcp/shared';
 
 import type { SearchMatch, SearchQueryFilters } from '../types/catalog.js';
 import { compareSearchMatches } from './rerank.js';
+import {
+  analyzeQuery,
+  normalizeForSearch,
+  scoreIntentBoost,
+  type SearchIntent,
+  tokenizeForSearch
+} from './queryAnalysis.js';
 
 export function filterChunks(
   chunks: DocumentChunk[],
@@ -44,39 +50,70 @@ export function keywordSearch(
   query: string,
   chunks: DocumentChunk[],
   filters: SearchQueryFilters,
+  searchIntent: SearchIntent = 'docs',
 ): SearchMatch[] {
   const scopedChunks = filterChunks(chunks, filters);
-  const normalizedQuery = normalizeText(query);
-  const queryTokens = tokenize(query);
+  const analysis = analyzeQuery(query, searchIntent);
 
   return scopedChunks
     .map((chunk) => {
-      const haystack = normalizeText(
+      const title = normalizeForSearch(chunk.title);
+      const summary = normalizeForSearch(chunk.summary ?? '');
+      const body = normalizeForSearch(chunk.body);
+      const sourcePath = normalizeForSearch(chunk.sourcePath ?? '');
+      const symbolTokens = new Set(chunk.symbols.flatMap((symbol) => tokenizeForSearch(symbol)));
+      const haystack = normalizeForSearch(
         `${chunk.title} ${chunk.summary ?? ''} ${chunk.body} ${chunk.symbols.join(' ')}`,
       );
 
       let score = 0;
       const reasons = new Set<string>();
 
-      if (haystack.includes(normalizedQuery)) {
-        score += 6;
+      if (analysis.normalized && haystack.includes(analysis.normalized)) {
+        score += 10;
         reasons.add('full query match');
       }
 
-      for (const token of queryTokens) {
-        if (normalizeText(chunk.title).includes(token)) {
-          score += 3;
+      for (const token of analysis.tokens) {
+        if (title.includes(token)) {
+          score += 6;
           reasons.add(`title:${token}`);
         }
 
-        if (chunk.symbols.some((symbol) => normalizeText(symbol).includes(token))) {
-          score += 4;
+        if (symbolTokens.has(token)) {
+          score += 8;
           reasons.add(`symbol:${token}`);
         }
 
-        if (haystack.includes(token)) {
+        if (summary.includes(token)) {
+          score += 3;
+        }
+
+        if (sourcePath.includes(token)) {
+          score += 2;
+        }
+
+        if (body.includes(token)) {
           score += 1;
         }
+      }
+
+      const requiredTokensMatched = analysis.phraseTokens.filter(
+        (token) => title.includes(token) || symbolTokens.has(token) || summary.includes(token) || sourcePath.includes(token),
+      ).length;
+      if (analysis.phraseTokens.length > 1 && requiredTokensMatched === analysis.phraseTokens.length) {
+        score += 8;
+        reasons.add('all key tokens');
+      }
+
+      const intentBoost = scoreIntentBoost(chunk, analysis, filters);
+      score += intentBoost.score;
+      for (const reason of intentBoost.reasons) {
+        reasons.add(reason);
+      }
+
+      if (searchIntent === 'docs' && !analysis.wantsExamples && isExampleChunk(chunk)) {
+        score = Math.min(score, 48);
       }
 
       return {
@@ -88,4 +125,8 @@ export function keywordSearch(
     .filter((match) => match.score > 0)
     .sort(compareSearchMatches)
     .slice(0, filters.limit);
+}
+
+function isExampleChunk(chunk: DocumentChunk): boolean {
+  return chunk.docType === 'example' || chunk.docType === 'live-demo';
 }
