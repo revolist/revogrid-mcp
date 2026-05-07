@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
+import { lstat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 import { resolveFromWorkspace } from '@revogrid-mcp/shared';
@@ -17,6 +18,7 @@ export type SourceUpdateRepositorySummary = {
   beforeRevision: string;
   afterRevision: string;
   branch: string;
+  rehydrated: boolean;
   updated: boolean;
 };
 
@@ -28,18 +30,21 @@ type RepositoryConfig = {
   repository: GitRepository;
   envVar: 'REVOGRID_SOURCE_ROOT' | 'REVOGRID_PRO_SOURCE_ROOT';
   defaultPath: string;
+  remoteUrl: string;
 };
 
 const REPOSITORIES: RepositoryConfig[] = [
   {
     repository: 'revogrid',
     envVar: 'REVOGRID_SOURCE_ROOT',
-    defaultPath: 'external/revogrid'
+    defaultPath: 'external/revogrid',
+    remoteUrl: 'https://github.com/revolist/revogrid.git'
   },
   {
     repository: 'revogrid-pro',
     envVar: 'REVOGRID_PRO_SOURCE_ROOT',
-    defaultPath: 'external/revogrid-pro'
+    defaultPath: 'external/revogrid-pro',
+    remoteUrl: 'https://github.com/revolist/revogrid-pro.git'
   }
 ];
 
@@ -62,12 +67,24 @@ async function updateRepository(
   githubToken: string | undefined,
 ): Promise<SourceUpdateRepositorySummary> {
   const rootPath = resolveRepositoryRoot(config);
-  const beforeRevision = await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken);
+  const hasUsableGitMetadata = await isUsableGitRepository(rootPath, githubToken);
+  const beforeRevision = hasUsableGitMetadata
+    ? await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken)
+    : 'unavailable';
+
+  if (!hasUsableGitMetadata) {
+    await rehydrateRepository(rootPath, config.remoteUrl, githubToken);
+  }
 
   await runGit(rootPath, ['fetch', '--prune', 'origin'], githubToken);
 
   const branch = await resolveUpdateBranch(rootPath, githubToken);
-  await runGit(rootPath, ['merge', '--ff-only', `origin/${branch}`], githubToken);
+  if (hasUsableGitMetadata) {
+    await runGit(rootPath, ['merge', '--ff-only', `origin/${branch}`], githubToken);
+  } else {
+    await runGit(rootPath, ['reset', '--hard', `origin/${branch}`], githubToken);
+    await runGit(rootPath, ['clean', '-fd'], githubToken);
+  }
 
   const afterRevision = await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken);
 
@@ -77,8 +94,49 @@ async function updateRepository(
     beforeRevision,
     afterRevision,
     branch,
+    rehydrated: !hasUsableGitMetadata,
     updated: beforeRevision !== afterRevision
   };
+}
+
+async function isUsableGitRepository(rootPath: string, githubToken: string | undefined): Promise<boolean> {
+  const gitDir = await runGit(rootPath, ['rev-parse', '--git-dir'], githubToken, {
+    allowFailure: true
+  });
+
+  return gitDir.length > 0;
+}
+
+async function rehydrateRepository(
+  rootPath: string,
+  remoteUrl: string,
+  githubToken: string | undefined,
+): Promise<void> {
+  await removeBrokenGitFile(rootPath);
+  await runGit(rootPath, ['init'], githubToken);
+  await runGit(rootPath, ['remote', 'remove', 'origin'], githubToken, {
+    allowFailure: true
+  });
+  await runGit(rootPath, ['remote', 'add', 'origin', remoteUrl], githubToken);
+}
+
+async function removeBrokenGitFile(rootPath: string): Promise<void> {
+  const gitPath = path.join(rootPath, '.git');
+
+  try {
+    const stats = await lstat(gitPath);
+    if (stats.isFile()) {
+      await unlink(gitPath);
+    }
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code !== 'ENOENT') {
+      throw error;
+    }
+  }
 }
 
 function resolveRepositoryRoot(config: RepositoryConfig): string {
@@ -104,7 +162,24 @@ async function resolveUpdateBranch(rootPath: string, githubToken: string | undef
     return branch;
   }
 
+  const remoteDefaultBranch = await resolveRemoteDefaultBranch(rootPath, githubToken);
+  if (remoteDefaultBranch) {
+    return remoteDefaultBranch;
+  }
+
   return 'main';
+}
+
+async function resolveRemoteDefaultBranch(
+  rootPath: string,
+  githubToken: string | undefined,
+): Promise<string | undefined> {
+  const remoteHead = await runGit(rootPath, ['ls-remote', '--symref', 'origin', 'HEAD'], githubToken, {
+    allowFailure: true
+  });
+  const match = remoteHead.match(/^ref:\s+refs\/heads\/([^\s]+)\s+HEAD/m);
+
+  return match?.[1];
 }
 
 async function runGit(
