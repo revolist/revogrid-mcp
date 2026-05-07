@@ -51,7 +51,9 @@ const AppEnvSchema = z.object({
   RATE_LIMIT_WINDOW_MS: integerFromEnv.default(60_000),
   ENABLE_PRO_ROUTE_AUTH: booleanFromEnv.default(false),
   AUTH_JWT_SECRET: z.string().optional(),
-  WEBHOOK_TOKEN: z.string().default(DEFAULT_WEBHOOK_TOKEN)
+  WEBHOOK_TOKEN: z.string().default(DEFAULT_WEBHOOK_TOKEN),
+  SOURCE_UPDATE_GITHUB_TOKEN: z.string().optional(),
+  GITHUB_TOKEN: z.string().optional()
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;

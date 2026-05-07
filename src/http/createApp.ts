@@ -14,6 +14,10 @@ import { registerSecurityHooks } from './middleware/security.js';
 import type { AppServices } from '../types/catalog.js';
 import { runReindex } from '../services/reindexService.js';
 
+type ReindexHookPayload = {
+  updateSources?: boolean;
+};
+
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = createLogger(config.LOG_LEVEL);
   const publicServices = createServicesForRepository(
@@ -111,7 +115,10 @@ export function createApp(config: AppConfig, services: AppServices) {
     }
 
     try {
-      const { dataset, summary } = await runReindex();
+      const payload = isRecord(request.body) ? (request.body as ReindexHookPayload) : {};
+      const { dataset, summary, sourceUpdate } = await runReindex({
+        updateSources: payload.updateSources === true
+      });
       
       // Update both public and private repositories if applicable
       // In this setup, services.contentRepository is the root content repository
@@ -120,6 +127,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       return {
         status: 'success',
         message: 'Re-indexing completed successfully',
+        sourceUpdate,
         summary
       };
     } catch (error) {
@@ -152,4 +160,8 @@ export function createApp(config: AppConfig, services: AppServices) {
   });
 
   return app;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

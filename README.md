@@ -250,6 +250,17 @@ curl -X POST http://localhost:8787/hooks/reindex \
      -H "X-Webhook-Token: dev-webhook-token"
 ```
 
+To pull the latest configured GitHub source branches before rebuilding the catalog, send JSON with `updateSources: true`:
+
+```bash
+curl -X POST http://localhost:8787/hooks/reindex \
+     -H "Content-Type: application/json" \
+     -H "X-Webhook-Token: dev-webhook-token" \
+     -d '{"updateSources":true}'
+```
+
+For private GitHub sources, set `SOURCE_UPDATE_GITHUB_TOKEN` in the server environment. `GITHUB_TOKEN` is also accepted as a fallback. Do not pass the GitHub token in the webhook request.
+
 The response includes a summary of the indexing process, including file counts and categorization.
 
 ### Token Generation
@@ -310,6 +321,25 @@ Resolution order is:
 1. `REVOGRID_SOURCE_ROOT` / `REVOGRID_PRO_SOURCE_ROOT`
 2. nested submodules in `external/`
 3. sibling repos one level above `revogrid-mcp`
+
+Refresh the nested source checkouts before reindexing:
+
+```bash
+pnpm sources:update
+```
+
+Use `--remote` when you want the submodules to move to the latest configured upstream branch instead of the committed submodule revisions:
+
+```bash
+pnpm sources:update -- --remote
+```
+
+The Pro adapter supports both the legacy Astro layout and the current package layout:
+
+- `src/content/docs` and `packages/portal/src/content/docs`
+- `src/content/demo` and `packages/portal/src/content/demo`
+- `src/components`, `packages/portal/src/components`, `packages/demos/src/components`, and `packages/examples/src/components`
+- `release/plugins`, `packages/pro/plugins`, and `packages/enterprise/plugins`
 
 ## Environment variables
 
@@ -405,6 +435,10 @@ Copy `.env.example` to `.env` and adjust only what you need.
   Secret token required to trigger the `/hooks/reindex` webhook.
   Default: `dev-webhook-token`
   Pass this token in the `X-Webhook-Token` header.
+
+- `SOURCE_UPDATE_GITHUB_TOKEN`
+  Optional GitHub token used only when `/hooks/reindex` receives `{"updateSources":true}` or when `pnpm sources:update` runs.
+  If omitted, `GITHUB_TOKEN` is used as a fallback.
 
 ### Docker Compose and local container wiring
 
@@ -508,7 +542,7 @@ Notes:
 
 - `data/catalog.json` is written to the local `./data` folder through a bind mount
 - inside Docker Compose, `POSTGRES_HOST` is automatically pointed at the `postgres` service
-- Docker Compose mounts your local source repos read-only into the container
+- Docker Compose mounts your local source repos into the container so the protected reindex hook can optionally update them
 - by default it mounts nested submodules from `./external/revogrid` and `./external/revogrid-pro`
 - override those with `LOCAL_REVOGRID_SOURCE_PATH` and `LOCAL_REVOGRID_PRO_SOURCE_PATH` in `.env` if needed
 - inside the container, indexing uses `/app/external/revogrid` and `/app/external/revogrid-pro`
@@ -682,6 +716,7 @@ Good manual test queries:
 - `pnpm build` builds the workspace
 - `pnpm test` runs Vitest
 - `pnpm lint` runs ESLint
+- `pnpm sources:update` initializes and updates `external/revogrid` plus `external/revogrid-pro`
 - `pnpm reindex` rebuilds the real catalog artifact and optionally persists it
 - `pnpm backfill:symbols` enriches a generated artifact with additional derived symbols
 

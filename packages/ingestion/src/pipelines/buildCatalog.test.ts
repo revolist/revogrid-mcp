@@ -123,7 +123,7 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'src/content/docs/api/pivot.md',
+        'packages/portal/src/content/docs/api/pivot.md',
         [
           '---',
           'title: Pivot',
@@ -137,7 +137,7 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'src/content/demo/pivot.mdx',
+        'packages/portal/src/content/demo/pivot.mdx',
         [
           '---',
           'title: Pivot Demo',
@@ -151,7 +151,7 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'src/components/pivot/Pivot.tsx',
+        'packages/demos/src/components/pivot/Pivot.tsx',
         [
           'import { PivotPlugin } from "@revolist/revogrid-pro";',
           '',
@@ -162,12 +162,12 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'src/components/overrides/Header.astro',
+        'packages/demos/src/components/overrides/Header.astro',
         '<header>Should be ignored</header>',
       ),
       writeFixtureFile(
         revogridProRoot,
-        'release/plugins/pivot/index.ts',
+        'packages/enterprise/plugins/pivot/index.ts',
         [
           'export class PivotPlugin {',
           '  applyPivot() {}',
@@ -276,8 +276,38 @@ describe.sequential('buildCatalogDataset', () => {
   it('excludes non-example override components from the example adapter', async () => {
     const sources = await getExampleSources();
 
-    expect(sources.some((source) => source.relativePath.includes('src/components/overrides/Header.astro'))).toBe(false);
-    expect(sources.some((source) => source.relativePath.includes('src/components/pivot/Pivot.tsx'))).toBe(true);
+    expect(
+      sources.some((source) => source.relativePath.includes('packages/demos/src/components/overrides/Header.astro')),
+    ).toBe(false);
+    expect(sources.some((source) => source.relativePath.includes('packages/demos/src/components/pivot/Pivot.tsx'))).toBe(
+      true,
+    );
+  });
+
+  it('maps current pro package layout to pro urls and gated chunks', async () => {
+    const dataset = await buildCatalogDataset();
+    const pivotApi = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid-pro/packages/portal/src/content/docs/api/pivot.md',
+    );
+    const pivotDemo = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid-pro/packages/portal/src/content/demo/pivot.mdx',
+    );
+    const pivotPlugin = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid-pro/packages/enterprise/plugins/pivot/index.ts',
+    );
+
+    expect(pivotApi).toMatchObject({
+      requiresPro: true,
+      url: 'https://pro.rv-grid.com/api/pivot'
+    });
+    expect(pivotDemo).toMatchObject({
+      requiresPro: true,
+      url: 'https://pro.rv-grid.com/demo/pivot'
+    });
+    expect(pivotPlugin).toMatchObject({
+      requiresPro: true,
+      url: 'https://pro.rv-grid.com/api/pivot'
+    });
   });
 
   it('turns type files into instruction-rich API chunks', async () => {

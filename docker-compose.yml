@@ -29,8 +29,8 @@ services:
       - '${APP_PUBLISHED_PORT:-8787}:8787'
     volumes:
       - ./data:/app/data
-      - ${LOCAL_REVOGRID_SOURCE_PATH:-./external/revogrid}:/app/external/revogrid:ro
-      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-./external/revogrid-pro}:/app/external/revogrid-pro:ro
+      - ${LOCAL_REVOGRID_SOURCE_PATH:-./external/revogrid}:/app/external/revogrid
+      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-./external/revogrid-pro}:/app/external/revogrid-pro
     labels:
       traefik.enable: ${TRAEFIK_ENABLE:-false}
       traefik.http.routers.revogrid-mcp.rule: Host(`${TRAEFIK_HOST:-revogrid-mcp.localhost}`)
@@ -56,8 +56,8 @@ services:
       - internal
     volumes:
       - ./data:/app/data
-      - ${LOCAL_REVOGRID_SOURCE_PATH:-./external/revogrid}:/app/external/revogrid:ro
-      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-./external/revogrid-pro}:/app/external/revogrid-pro:ro
+      - ${LOCAL_REVOGRID_SOURCE_PATH:-./external/revogrid}:/app/external/revogrid
+      - ${LOCAL_REVOGRID_PRO_SOURCE_PATH:-./external/revogrid-pro}:/app/external/revogrid-pro
     command: pnpm reindex
 
 volumes:

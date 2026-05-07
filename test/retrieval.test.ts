@@ -74,11 +74,11 @@ describe('retrieval quality', () => {
     ['beforeedit event', 'revogrid-src-types-events'],
     ['column grouping', 'revogrid-docs-guide-column-grouping'],
     ['row grouping', 'revogrid-docs-guide-row-grouping'],
-    ['pivot dimensions', 'revogrid-pro-src-content-docs-guides-data-manage-pivot'],
-    ['tree data', 'revogrid-pro-src-content-docs-guides-data-manage-tree'],
-    ['infinite scroll', 'revogrid-pro-src-content-docs-guides-infinity-scroll'],
-    ['export excel', 'revogrid-pro-src-content-docs-guides-data-manage-excel-export'],
-    ['filter plugin', 'revogrid-pro-src-content-docs-guides-filter-header'],
+    ['pivot dimensions', 'revogrid-pro-packages-portal-src-content-docs-guides-pivot-concepts-dimensions'],
+    ['tree data', 'revogrid-pro-packages-portal-src-content-docs-guides-data-manage-tree'],
+    ['infinite scroll', 'revogrid-pro-packages-portal-src-content-docs-guides-infinity-scroll'],
+    ['export excel', 'revogrid-pro-packages-portal-src-content-docs-guides-data-manage-excel-export'],
+    ['filter plugin', 'revogrid-pro-packages-portal-src-content-docs-guides-data-filter-filter-header'],
     ['angular setup', 'revogrid-docs-guide-installation']
   ])('puts the intended local catalog result first for "%s"', (query, expectedTopId) => {
     const results = hybridSearch(query, dataset.chunks, {

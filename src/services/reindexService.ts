@@ -14,12 +14,21 @@ import type { DocumentChunk, SeedDataset } from '@revogrid-mcp/content-model';
 import { Pool } from 'pg';
 
 import { loadConfig } from '../config/env.js';
+import { updateGithubSources, type SourceUpdateSummary } from './sourceUpdateService.js';
 
 type SourceInventory = Record<'docs' | 'examples' | 'changelog' | 'api', Awaited<ReturnType<typeof getDocsSources>>>;
 type IndexSummary = ReturnType<typeof buildIndexSummary>;
 
-export async function runReindex(): Promise<{ dataset: SeedDataset; summary: IndexSummary }> {
+export async function runReindex(options: { updateSources?: boolean } = {}): Promise<{
+  dataset: SeedDataset;
+  summary: IndexSummary;
+  sourceUpdate?: SourceUpdateSummary;
+}> {
   const config = loadConfig(process.env);
+  const githubToken = config.SOURCE_UPDATE_GITHUB_TOKEN ?? config.GITHUB_TOKEN;
+  const sourceUpdate = options.updateSources
+    ? await updateGithubSources(githubToken ? { githubToken } : {})
+    : undefined;
   const absolutePath = path.resolve(process.cwd(), config.REINDEX_OUTPUT);
   const [docs, examples, changelog, api, dataset] = await Promise.all([
     getDocsSources(),
@@ -71,7 +80,7 @@ export async function runReindex(): Promise<{ dataset: SeedDataset; summary: Ind
     }
   }
 
-  return { dataset, summary };
+  return sourceUpdate ? { dataset, summary, sourceUpdate } : { dataset, summary };
 }
 
 function buildIndexSummary(
@@ -100,7 +109,10 @@ function buildIndexSummary(
     chunksByFramework: countBy(chunks, (chunk) => chunk.framework ?? 'unspecified'),
     requiresProChunkCount: chunks.filter((chunk) => chunk.requiresPro).length,
     typedApiChunkCount: chunks.filter((chunk) =>
-      chunk.sourcePath?.includes('/src/types/') || chunk.sourcePath?.includes('/release/plugins/'),
+      chunk.sourcePath?.includes('/src/types/') ||
+      chunk.sourcePath?.includes('/release/plugins/') ||
+      chunk.sourcePath?.includes('/packages/pro/plugins/') ||
+      chunk.sourcePath?.includes('/packages/enterprise/plugins/'),
     ).length
   };
 }

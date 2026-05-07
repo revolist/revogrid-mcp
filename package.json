@@ -24,6 +24,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "sources:update": "tsx scripts/updateSources.ts",
     "reindex": "tsx scripts/reindex.ts",
     "derive:token": "tsx scripts/deriveToken.ts",
     "backfill:symbols": "tsx scripts/backfillSymbols.ts"
