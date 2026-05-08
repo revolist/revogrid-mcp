@@ -69,7 +69,7 @@ async function updateRepository(
   const rootPath = resolveRepositoryRoot(config);
   const hasUsableGitMetadata = await isUsableGitRepository(rootPath, githubToken);
   const beforeRevision = hasUsableGitMetadata
-    ? await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken)
+    ? await resolveCurrentRevision(rootPath, githubToken)
     : 'unavailable';
 
   if (!hasUsableGitMetadata) {
@@ -97,6 +97,14 @@ async function updateRepository(
     rehydrated: !hasUsableGitMetadata,
     updated: beforeRevision !== afterRevision
   };
+}
+
+async function resolveCurrentRevision(rootPath: string, githubToken: string | undefined): Promise<string> {
+  const revision = await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken, {
+    allowFailure: true
+  });
+
+  return revision || 'unavailable';
 }
 
 async function isUsableGitRepository(rootPath: string, githubToken: string | undefined): Promise<boolean> {
