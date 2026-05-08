@@ -79,7 +79,7 @@ async function updateRepository(
   await runGit(rootPath, ['fetch', '--prune', 'origin'], githubToken);
 
   const branch = await resolveUpdateBranch(rootPath, githubToken);
-  if (hasUsableGitMetadata) {
+  if (hasUsableGitMetadata && beforeRevision !== 'unavailable') {
     await runGit(rootPath, ['merge', '--ff-only', `origin/${branch}`], githubToken);
   } else {
     await runGit(rootPath, ['reset', '--hard', `origin/${branch}`], githubToken);
