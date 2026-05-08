@@ -149,8 +149,10 @@ function resolveRepositoryRoot(config: RepositoryConfig): string {
 }
 
 async function resolveUpdateBranch(rootPath: string, githubToken: string | undefined): Promise<string> {
-  const currentBranch = await runGit(rootPath, ['rev-parse', '--abbrev-ref', 'HEAD'], githubToken);
-  if (currentBranch !== 'HEAD') {
+  const currentBranch = await runGit(rootPath, ['rev-parse', '--abbrev-ref', 'HEAD'], githubToken, {
+    allowFailure: true
+  });
+  if (currentBranch && currentBranch !== 'HEAD') {
     return currentBranch;
   }
 
