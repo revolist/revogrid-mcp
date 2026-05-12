@@ -86,6 +86,8 @@ async function updateRepository(
     await runGit(rootPath, ['clean', '-fd'], githubToken);
   }
 
+  await updateSubmodules(rootPath, githubToken);
+
   const afterRevision = await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken);
 
   return {
@@ -97,6 +99,11 @@ async function updateRepository(
     rehydrated: !hasUsableGitMetadata,
     updated: beforeRevision !== afterRevision
   };
+}
+
+async function updateSubmodules(rootPath: string, githubToken: string | undefined): Promise<void> {
+  await runGit(rootPath, ['submodule', 'sync', '--recursive'], githubToken);
+  await runGit(rootPath, ['submodule', 'update', '--init', '--recursive'], githubToken);
 }
 
 async function resolveCurrentRevision(rootPath: string, githubToken: string | undefined): Promise<string> {
