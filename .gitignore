@@ -4,6 +4,7 @@ dist
 .DS_Store
 coverage
 *.tsbuildinfo
+*.vsix
 test/*.js
 test/*.js.map
 test/*.d.ts

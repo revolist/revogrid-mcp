@@ -1,22 +1,49 @@
 {
-  "name": "@revogrid-mcp/server",
-  "private": true,
-  "version": "0.1.0",
-  "description": "Hosted MCP server for structured RevoGrid knowledge retrieval.",
-  "homepage": "https://mcp.rv-grid.com",
+  "name": "revogrid-datagrid-mcp",
+  "displayName": "RevoGrid DataGrid MCP",
+  "publisher": "revolist",
+  "version": "0.1.1",
+  "description": "MCP server for structured RevoGrid DataGrid knowledge retrieval.",
+  "homepage": "https://rv-grid.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/revolist/revogrid-mcp.git"
+    "url": "https://github.com/revolist/revogrid.git"
   },
   "packageManager": "pnpm@10.4.1",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/vscode/extension.cjs",
   "types": "dist/index.d.ts",
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "revogrid",
+    "revolist",
+    "data-grid",
+    "datagrid"
+  ],
   "engines": {
-    "node": ">=20.11.0"
+    "node": ">=20.11.0",
+    "vscode": "^1.118.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "revogrid.mcpServers",
+        "label": "RevoGrid DataGrid MCP"
+      }
+    ]
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "pnpm build:server && pnpm build:extension",
+    "build:server": "tsc -b",
+    "build:extension": "esbuild src/vscode/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/vscode/extension.cjs",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -27,7 +54,9 @@
     "sources:update": "tsx scripts/updateSources.ts",
     "reindex": "tsx scripts/reindex.ts",
     "derive:token": "tsx scripts/deriveToken.ts",
-    "backfill:symbols": "tsx scripts/backfillSymbols.ts"
+    "backfill:symbols": "tsx scripts/backfillSymbols.ts",
+    "vscode:package": "vsce package --no-dependencies",
+    "vscode:publish": "vsce publish --no-dependencies"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
@@ -46,6 +75,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.10",
     "@types/pg": "^8.11.11",
+    "@types/vscode": "^1.118.0",
+    "@vscode/vsce": "^3.9.1",
+    "esbuild": "^0.28.0",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.0.2",
     "prettier": "^3.5.3",
