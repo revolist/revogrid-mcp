@@ -38,13 +38,13 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           fi
 
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          if [[ "$VERSION" != "$PACKAGE_VERSION" ]]; then
-            echo "Release version $VERSION must match package.json version $PACKAGE_VERSION" >&2
-            exit 1
-          fi
-
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Apply release version
+        run: |
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+          jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' server.json > server.tmp.json
+          mv server.tmp.json server.json
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -68,11 +68,6 @@ jobs:
         run: pnpm exec vsce publish --no-dependencies --skip-duplicate
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-
-      - name: Prepare MCP registry metadata
-        run: |
-          jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' server.json > server.tmp.json
-          mv server.tmp.json server.json
 
       - name: Install mcp-publisher
         run: |

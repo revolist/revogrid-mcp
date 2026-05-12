@@ -2,7 +2,7 @@
   "name": "revogrid-datagrid-mcp",
   "displayName": "RevoGrid DataGrid MCP",
   "publisher": "revolist",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP server for structured RevoGrid DataGrid knowledge retrieval.",
   "homepage": "https://rv-grid.com",
   "repository": {
