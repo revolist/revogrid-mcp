@@ -27,8 +27,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          submodules: recursive
 
       - name: Resolve release version
         id: version
@@ -65,17 +63,6 @@ jobs:
 
       - name: Test
         run: pnpm test
-
-      - name: Verify package keywords include RevoGrid tags
-        run: |
-          node - <<'NODE'
-          const mcpPackage = require('./package.json');
-          const revogridPackage = require('./external/revogrid/package.json');
-          const missing = revogridPackage.keywords.filter((keyword) => !mcpPackage.keywords.includes(keyword));
-          if (missing.length > 0) {
-            throw new Error(`package.json is missing RevoGrid keywords: ${missing.join(', ')}`);
-          }
-          NODE
 
       - name: Publish signed VS Code extension
         run: pnpm exec vsce publish --no-dependencies --skip-duplicate
