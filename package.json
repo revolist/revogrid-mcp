@@ -4,6 +4,7 @@
   "publisher": "revolist",
   "version": "0.1.2",
   "description": "MCP server for structured RevoGrid DataGrid knowledge retrieval.",
+  "icon": "assets/logo.png",
   "homepage": "https://rv-grid.com",
   "repository": {
     "type": "git",
