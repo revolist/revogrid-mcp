@@ -3,21 +3,32 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const spawnMock = vi.hoisted(() => vi.fn());
+const fsMock = vi.hoisted(() => ({
+  mkdir: vi.fn(),
+  readdir: vi.fn(),
+  rm: vi.fn()
+}));
 
 vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }));
+
+vi.mock('node:fs/promises', () => fsMock);
 
 const { updateGithubSources } = await import('../src/services/sourceUpdateService.js');
 
 describe('source update service', () => {
   afterEach(() => {
     spawnMock.mockReset();
+    fsMock.mkdir.mockReset();
+    fsMock.readdir.mockReset();
+    fsMock.rm.mockReset();
     vi.unstubAllEnvs();
   });
 
-  it('updates nested git submodules after moving a source repository forward', async () => {
+  it('replaces a source repository and updates nested git submodules', async () => {
     vi.stubEnv('REVOGRID_SOURCE_ROOT', '/tmp/revogrid-source');
+    fsMock.readdir.mockResolvedValue([]);
     spawnMock.mockImplementation((_command: string, args: string[]) => createGitProcess(gitOutput(args)));
 
     await updateGithubSources({
@@ -26,6 +37,18 @@ describe('source update service', () => {
 
     const gitArgs = spawnMock.mock.calls.map(([, args]) => args as string[]);
 
+    expect(fsMock.rm).toHaveBeenCalledWith('/tmp/revogrid-source', {
+      recursive: true,
+      force: true
+    });
+    expect(fsMock.mkdir).toHaveBeenCalledWith('/tmp/revogrid-source', {
+      recursive: true
+    });
+    expect(gitArgs).toContainEqual([
+      'clone',
+      'https://github.com/revolist/revogrid.git',
+      '/tmp/revogrid-source'
+    ]);
     expect(gitArgs).toContainEqual([
       '-C',
       '/tmp/revogrid-source',
@@ -42,15 +65,23 @@ describe('source update service', () => {
       '--recursive'
     ]);
 
-    const mergeIndex = gitArgs.findIndex((args) => args.includes('merge'));
+    expect(gitArgs.some((args) => args.includes('fetch'))).toBe(false);
+    expect(gitArgs.some((args) => args.includes('merge'))).toBe(false);
+    expect(gitArgs.some((args) => args.includes('reset'))).toBe(false);
+
+    const cloneIndex = gitArgs.findIndex((args) => args.includes('clone'));
     const submoduleUpdateIndex = gitArgs.findIndex(
       (args) => args.includes('submodule') && args.includes('update')
     );
-    expect(submoduleUpdateIndex).toBeGreaterThan(mergeIndex);
+    expect(submoduleUpdateIndex).toBeGreaterThan(cloneIndex);
   });
 });
 
 function gitOutput(args: string[]): string {
+  if (args.join(' ') === 'clone https://github.com/revolist/revogrid.git /tmp/revogrid-source') {
+    return '';
+  }
+
   const gitArgs = args.slice(2);
 
   if (gitArgs.join(' ') === 'rev-parse --git-dir') {
@@ -61,12 +92,6 @@ function gitOutput(args: string[]): string {
   }
   if (gitArgs.join(' ') === 'rev-parse --abbrev-ref HEAD') {
     return 'main';
-  }
-  if (gitArgs.join(' ') === 'fetch --prune origin') {
-    return '';
-  }
-  if (gitArgs.join(' ') === 'merge --ff-only origin/main') {
-    return 'Fast-forward';
   }
   if (gitArgs.join(' ') === 'submodule sync --recursive') {
     return '';

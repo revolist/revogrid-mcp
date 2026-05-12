@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
-import { lstat, unlink } from 'node:fs/promises';
+import { mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { resolveFromWorkspace } from '@revogrid-mcp/shared';
@@ -72,20 +72,8 @@ async function updateRepository(
     ? await resolveCurrentRevision(rootPath, githubToken)
     : 'unavailable';
 
-  if (!hasUsableGitMetadata) {
-    await rehydrateRepository(rootPath, config.remoteUrl, githubToken);
-  }
-
-  await runGit(rootPath, ['fetch', '--prune', 'origin'], githubToken);
-
+  await replaceRepository(rootPath, config.remoteUrl, githubToken);
   const branch = await resolveUpdateBranch(rootPath, githubToken);
-  if (hasUsableGitMetadata && beforeRevision !== 'unavailable') {
-    await runGit(rootPath, ['merge', '--ff-only', `origin/${branch}`], githubToken);
-  } else {
-    await runGit(rootPath, ['reset', '--hard', `origin/${branch}`], githubToken);
-    await runGit(rootPath, ['clean', '-fd'], githubToken);
-  }
-
   await updateSubmodules(rootPath, githubToken);
 
   const afterRevision = await runGit(rootPath, ['rev-parse', 'HEAD'], githubToken);
@@ -96,9 +84,56 @@ async function updateRepository(
     beforeRevision,
     afterRevision,
     branch,
-    rehydrated: !hasUsableGitMetadata,
+    rehydrated: true,
     updated: beforeRevision !== afterRevision
   };
+}
+
+async function replaceRepository(
+  rootPath: string,
+  remoteUrl: string,
+  githubToken: string | undefined,
+): Promise<void> {
+  await emptyRepositoryRoot(rootPath);
+  await runGitCommand(['clone', remoteUrl, rootPath], githubToken);
+}
+
+async function emptyRepositoryRoot(rootPath: string): Promise<void> {
+  try {
+    await rm(rootPath, {
+      recursive: true,
+      force: true
+    });
+  } catch (error) {
+    if (!isMountPointRemovalError(error)) {
+      throw error;
+    }
+  }
+
+  await mkdir(rootPath, {
+    recursive: true
+  });
+
+  const entries = await readdir(rootPath, {
+    withFileTypes: true
+  });
+  await Promise.all(
+    entries.map((entry) =>
+      rm(path.join(rootPath, entry.name), {
+        recursive: true,
+        force: true
+      })
+    )
+  );
+}
+
+function isMountPointRemovalError(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
+
+  return code === 'EBUSY' || code === 'EINVAL' || code === 'EPERM';
 }
 
 async function updateSubmodules(rootPath: string, githubToken: string | undefined): Promise<void> {
@@ -120,38 +155,6 @@ async function isUsableGitRepository(rootPath: string, githubToken: string | und
   });
 
   return gitDir.length > 0;
-}
-
-async function rehydrateRepository(
-  rootPath: string,
-  remoteUrl: string,
-  githubToken: string | undefined,
-): Promise<void> {
-  await removeBrokenGitFile(rootPath);
-  await runGit(rootPath, ['init'], githubToken);
-  await runGit(rootPath, ['remote', 'remove', 'origin'], githubToken, {
-    allowFailure: true
-  });
-  await runGit(rootPath, ['remote', 'add', 'origin', remoteUrl], githubToken);
-}
-
-async function removeBrokenGitFile(rootPath: string): Promise<void> {
-  const gitPath = path.join(rootPath, '.git');
-
-  try {
-    const stats = await lstat(gitPath);
-    if (stats.isFile()) {
-      await unlink(gitPath);
-    }
-  } catch (error) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    if (code !== 'ENOENT') {
-      throw error;
-    }
-  }
 }
 
 function resolveRepositoryRoot(config: RepositoryConfig): string {
@@ -205,8 +208,16 @@ async function runGit(
   githubToken: string | undefined,
   options: { allowFailure?: boolean } = {},
 ): Promise<string> {
+  return runGitCommand(['-C', rootPath, ...args], githubToken, options);
+}
+
+async function runGitCommand(
+  args: string[],
+  githubToken: string | undefined,
+  options: { allowFailure?: boolean } = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('git', ['-C', rootPath, ...args], {
+    const child = spawn('git', args, {
       env: buildGitEnv(githubToken),
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -229,7 +240,7 @@ async function runGit(
       }
 
       const message = Buffer.concat(stderr).toString('utf8').trim() || output;
-      reject(new Error(`git -C ${rootPath} ${args.join(' ')} failed: ${message}`));
+      reject(new Error(`git ${args.join(' ')} failed: ${message}`));
     });
   });
 }
