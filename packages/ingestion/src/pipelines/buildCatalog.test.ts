@@ -42,6 +42,56 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridRoot,
+        'docs/pro/compatibility.md',
+        [
+          '# Pro Compatibility',
+          '',
+          'This is internal-facing public notes that mention Pro capabilities.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'readme/README.md',
+        [
+          '# Readme Index',
+          '',
+          'General project readme and quick links.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'packages/widget/README.md',
+        [
+          '# Widget package',
+          '',
+          'Standalone package notes and examples.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'formats/number/README.md',
+        [
+          '# Number format',
+          '',
+          'Custom column format implementation notes.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'src/test/internal-behavior.ts',
+        [
+          'export function internalBehavior() {',
+          '  return \"internal\";',
+          '}'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
+        'dist/bundles/skip-this.md',
+        '# This file should be excluded',
+      ),
+      writeFixtureFile(
+        revogridRoot,
         'docs/demo/react/react-datagrid.md',
         [
           '---',
@@ -151,6 +201,28 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
+        'packages/enterprise/plugins/pivot/PIVOT_FEATURES.md',
+        [
+          '# Pivot feature matrix',
+          '',
+          '| Feature | React | Angular | Enterprise | Notes |',
+          '| --- | --- | --- | --- | --- |',
+          '| Hierarchical rows | Yes | Yes | No | Supports tree-style row grouping in matrix mode. |',
+          '| Enterprise export | No | No | No | Only for enterprise licensing. |'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'packages/enterprise/plugins/pivot/FEATURES_MATRIX.md',
+        [
+          '# Pivot feature list',
+          '- [ ] Legacy aggregate mode',
+          '- [x] Legacy formulas',
+          '- [ ] Legacy header controls'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridProRoot,
         'packages/demos/src/components/pivot/Pivot.tsx',
         [
           'import { PivotPlugin } from "@revolist/revogrid-pro";',
@@ -202,6 +274,55 @@ describe.sequential('buildCatalogDataset', () => {
     expect(dataset.chunks.length).toBeGreaterThanOrEqual(7);
     expect(dataset.chunks.some((chunk) => chunk.title === 'JavaScript Data Grid Overview')).toBe(true);
     expect(dataset.chunks.some((chunk) => chunk.title === 'Pivot')).toBe(true);
+    expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/readme/README.md')).toBe(true);
+    expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/packages/widget/README.md')).toBe(true);
+    expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/src/test/internal-behavior.ts')).toBe(true);
+  });
+
+  it('includes feature artifact files and merges explicit feature matrix records', async () => {
+    const dataset = await buildCatalogDataset();
+    const featureNames = dataset.features.map((feature) => feature.featureName.toLowerCase());
+
+    expect(featureNames).toContain('hierarchical rows');
+    expect(featureNames).toContain('enterprise export');
+    expect(featureNames).toContain('legacy formulas');
+    expect(featureNames).toContain('legacy aggregate mode');
+
+    const enterpriseExport = dataset.features.find(
+      (feature) => feature.featureName.toLowerCase() === 'enterprise export',
+    );
+    expect(enterpriseExport).toMatchObject({
+      supported: false,
+      requiresPro: true
+    });
+  });
+
+  it('keeps excluded build outputs out of chunking', async () => {
+    const dataset = await buildCatalogDataset();
+    expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/dist/bundles/skip-this.md')).toBe(false);
+  });
+
+  it('classifies internal source files as internal surface while leaving docs as user-facing', async () => {
+    const dataset = await buildCatalogDataset();
+    const internalChunk = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid/src/test/internal-behavior.ts',
+    );
+    const docsChunk = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid/docs/pro/compatibility.md',
+    );
+    const formatReadmeChunk = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid/formats/number/README.md',
+    );
+
+    expect(internalChunk).toMatchObject({
+      surface: 'internal'
+    });
+    expect(docsChunk).toMatchObject({
+      surface: 'core'
+    });
+    expect(formatReadmeChunk).toMatchObject({
+      sourcePath: 'revogrid/formats/number/README.md'
+    });
   });
 
   it('extracts framework, doc type, and example URL for React demos', async () => {

@@ -1,4 +1,5 @@
 import type { AppServices, RequestContext } from '../../types/catalog.js';
+import { filterVisibleChunks, summarizeCatalogCoverage } from '../tools/shared.js';
 
 export async function readLatestVersionResource(
   services: AppServices,
@@ -15,4 +16,9 @@ export async function readAllVersionsResource(
 ) {
   void context;
   return services.contentRepository.getVersions();
+}
+
+export async function readCatalogCoverageResource(services: AppServices, context: RequestContext) {
+  const chunks = await services.contentRepository.getChunks();
+  return summarizeCatalogCoverage(filterVisibleChunks(chunks, context));
 }

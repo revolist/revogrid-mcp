@@ -14,8 +14,12 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
   public constructor(private readonly repository: ContentRepository) {}
 
   public async listFeatures(entitlement: Entitlement) {
-    void entitlement;
-    return this.repository.getFeatures();
+    const features = await this.repository.getFeatures();
+    if (entitlement === 'paid_pro') {
+      return features;
+    }
+
+    return features.filter((feature) => !feature.requiresPro);
   }
 
   public async resolveFeature(

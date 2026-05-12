@@ -42,6 +42,7 @@ type SourceDocument = {
   source: SourceFile;
   rawBody: string;
   resolvedContent: string;
+  featureArtifacts: FeatureRecord[];
 };
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx']);
@@ -66,11 +67,13 @@ export async function buildCatalogDataset(): Promise<SeedDataset> {
   )
     .filter((document): document is SourceDocument => Boolean(document))
     .sort((left, right) => left.chunk.id.localeCompare(right.chunk.id));
+  const derivedFeatures = deriveFeatures(normalizedDocuments.map((document) => document.chunk));
+  const explicitFeatures = extractFeatureArtifacts(normalizedDocuments);
 
   return SeedDatasetSchema.parse({
     chunks: normalizedDocuments.map((document) => document.chunk),
     versions: deriveVersions(normalizedDocuments.map((document) => document.chunk), packageVersions),
-    features: deriveFeatures(normalizedDocuments.map((document) => document.chunk)),
+    features: mergeFeatureRecords(derivedFeatures, explicitFeatures),
     migrations: deriveMigrations(normalizedDocuments, packageVersions.revogrid)
   });
 }
@@ -113,11 +116,17 @@ async function normalizeSourceFile(
 
   const url = buildCanonicalUrl(source);
   const summary = summarizeBody(attributes.description ?? typeInstructions?.summary, plainBody);
+  const featureArtifacts = parseFeatureArtifactsFromSource({
+    body: body,
+    path: source.relativePath,
+    content: resolvedContent
+  });
 
   return {
     source,
     rawBody: body,
     resolvedContent,
+    featureArtifacts,
     chunk: {
       id: buildChunkId(source.repository, source.relativePath),
       title,
@@ -137,6 +146,361 @@ async function normalizeSourceFile(
       releaseDate: extractReleaseDate(attributes, body, source.relativePath)
     }
   };
+}
+
+function parseFeatureArtifactsFromSource(params: {
+  path: string;
+  body: string;
+  content: string;
+}): FeatureRecord[] {
+  const normalizedPath = params.path.replace(/\\/g, '/').toLowerCase();
+  if (!isFeatureArtifactPath(normalizedPath)) {
+    return [];
+  }
+
+  const featureNotes = extractFeatureSectionBody(params.body);
+  const titleBasedFallback = deriveFeatureNameFromTitle(
+    (params.body.match(/^#+\s*(.+)$/m)?.[1] ?? params.body.split('\n')[0] ?? '').trim() || '',
+  );
+  const directRecords = parseFeatureMatrixMarkdown(params.content, normalizedPath);
+  if (directRecords.length > 0) {
+    return directRecords;
+  }
+
+  if (!titleBasedFallback) {
+    return [];
+  }
+
+  return [
+    {
+      featureName: titleBasedFallback,
+      supported: true,
+      requiresPro: params.path.includes('/pro/') || params.path.toLowerCase().includes('pivot'),
+      supportedFrameworks: detectFrameworksFromText(featureNotes),
+      notes: [`Feature matrix entry from ${params.path}: ${featureNotes}`],
+      relatedChunkIds: [],
+      relatedExampleIds: [],
+      aliases: [titleBasedFallback]
+    }
+  ];
+}
+
+function extractFeatureSectionBody(value: string): string {
+  return value
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .slice(0, 40)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function deriveFeatureNameFromTitle(value: string): string | null {
+  const normalized = normalizeText(value)
+    .replace(/feature$|features$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized || null;
+}
+
+function isFeatureArtifactPath(normalizedPath: string): boolean {
+  return (
+    normalizedPath.endsWith('.feature.md') ||
+    normalizedPath.endsWith('.features.md') ||
+    normalizedPath.endsWith('.feature-matrix.md') ||
+    normalizedPath.endsWith('_feature.md') ||
+    normalizedPath.endsWith('_features.md') ||
+    normalizedPath.includes('/features/') ||
+    (normalizedPath.includes('features') && normalizedPath.includes('matrix'))
+  );
+}
+
+function parseFeatureMatrixMarkdown(content: string, sourcePath: string): FeatureRecord[] {
+  const rows = parseFeatureMatrixRows(content);
+  if (rows.length > 0) {
+    return rows
+      .map((row) => buildFeatureRecordFromFeatureRow(row, sourcePath))
+      .filter((value): value is FeatureRecord => value !== null);
+  }
+
+  const records = parseFeatureBullets(content)
+    .map((entry) => buildFeatureRecordFromFeatureRow(entry, sourcePath))
+    .filter((value): value is FeatureRecord => value !== null);
+
+  return records;
+}
+
+type FeatureMatrixRow = {
+  name: string;
+  supported: boolean;
+  notes: string[];
+  requiresPro: boolean;
+};
+
+function parseFeatureMatrixRows(content: string): FeatureMatrixRow[] {
+  const lines = content.split('\n').map((line) => line.trimEnd());
+  const headerLineIndex = lines.findIndex((line, index) => {
+    const nextLine = lines[index + 1];
+    return isTableLine(line) && Boolean(nextLine && isSeparatorLine(nextLine));
+  });
+
+  if (headerLineIndex < 0) {
+    return [];
+  }
+
+  const headerLine = lines[headerLineIndex];
+  if (!headerLine) {
+    return [];
+  }
+  const headerColumns = splitMarkdownTableLine(headerLine);
+  if (headerColumns.length < 2) {
+    return [];
+  }
+
+  const statusColumns = headerColumns.map((column, columnIndex) => ({
+    isProSignal: /pro|enterprise/i.test(column),
+    isNotesColumn: /notes|description|comment|details/i.test(column)
+  }));
+
+  const rows: FeatureMatrixRow[] = [];
+  for (let index = headerLineIndex + 2; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line) {
+      continue;
+    }
+    if (!isTableLine(line) || line.startsWith('|---')) {
+      continue;
+    }
+
+    const cells = splitMarkdownTableLine(line);
+    if (cells.length <= 1) {
+      continue;
+    }
+
+    const firstCell = cells[0];
+    if (!firstCell) {
+      continue;
+    }
+    const name = cleanFeatureNameFromLine(firstCell);
+    if (!name) {
+      continue;
+    }
+
+    const statusCells = cells.slice(1);
+    const matrixSupport = assessMatrixSupport(statusCells);
+    if (!matrixSupport.hasValue) {
+      continue;
+    }
+
+    const notes = cells
+      .slice(1)
+      .map((column, columnIndex) => {
+        const statusColumn = statusColumns[columnIndex + 1];
+        if (!statusColumn || statusColumn.isProSignal) {
+          return '';
+        }
+
+        if (statusColumn.isNotesColumn) {
+          return column.trim();
+        }
+
+        const normalized = cleanCellText(column);
+        return parseSupportText(normalized).known ? '' : cleanCellText(column);
+      })
+      .filter(Boolean);
+
+    const requiresPro = matrixSupport.hasProSupport || statusColumns.some((statusColumn, columnIndex) => {
+      if (!statusColumn.isProSignal || columnIndex === 0) {
+        return false;
+      }
+      const normalizedStatus = cleanCellText(statusCells[columnIndex - 1] ?? '');
+      return normalizedStatus && isSupportedStatus(normalizedStatus);
+    }) || /pro|enterprise/i.test(name);
+
+    rows.push({
+      name,
+      supported: matrixSupport.supported,
+      requiresPro,
+      notes
+    });
+  }
+
+  return rows;
+}
+
+function parseFeatureBullets(content: string): FeatureMatrixRow[] {
+  const rows: FeatureMatrixRow[] = [];
+  const lines = content.split('\n');
+
+  for (const line of lines) {
+    const match = line.match(
+      /^\s*[-*+]\s*(?:\[(?<checkbox>[xX ])\]\s*)?(?<name>[^\s].+?)(?:\s*[-:]\s*(?<note>.+))?$/,
+    );
+    if (!match?.groups?.name) {
+      continue;
+    }
+
+    const name = cleanFeatureNameFromLine(match.groups.name);
+    const checkbox = match.groups.checkbox?.trim().toLowerCase();
+    const rawSupport = match.groups.note ?? '';
+    const note = match.groups.note?.trim() ?? '';
+    const noteValue = note ? [note] : [];
+    const normalized = normalizeText(name);
+    if (!normalized) {
+      continue;
+    }
+
+    const supports = checkbox === 'x' ? true : checkbox === ' ' ? false : null;
+    const supportHint = parseSupportText(rawSupport);
+
+    rows.push({
+      name,
+      supported: supports ?? (supportHint.known ? supportHint.supported : true),
+      requiresPro: /pro|enterprise/i.test(note) || /pro|enterprise/i.test(normalized),
+      notes: noteValue
+    });
+  }
+
+  return rows;
+}
+
+type MatrixSupportSummary = {
+  hasValue: boolean;
+  supported: boolean;
+  hasProSupport: boolean;
+};
+
+function assessMatrixSupport(cells: string[]): MatrixSupportSummary {
+  let hasSupportValue = false;
+  let hasSupported = false;
+  let hasProSupport = false;
+
+  for (const rawCell of cells) {
+    const normalized = cleanCellText(rawCell);
+    const parsed = parseSupportText(normalized);
+    if (!parsed.known) {
+      continue;
+    }
+
+    hasSupportValue = true;
+    if (parsed.supported) {
+      hasSupported = true;
+      hasProSupport ||= /pro|enterprise/i.test(normalized);
+    }
+  }
+
+  if (!hasSupportValue) {
+    return { hasValue: false, supported: true, hasProSupport: false };
+  }
+
+  return {
+    hasValue: true,
+    supported: hasSupported,
+    hasProSupport
+  };
+}
+
+function parseSupportText(value: string): { supported: boolean; known: boolean } {
+  const normalized = cleanCellText(value).toLowerCase();
+  const normalizedForSupport = normalized.replace(/[\s·•\-_]+/g, ' ');
+
+  if (
+    /\b(no|false|unsupported|not supported)\b/.test(normalizedForSupport) ||
+    normalizedForSupport.includes('✗') ||
+    normalizedForSupport === 'x' ||
+    normalizedForSupport === 'n' ||
+    normalizedForSupport === 'no'
+  ) {
+    return { supported: false, known: true };
+  }
+
+  if (/\b(yes|supported|enabled|true)\b/.test(normalizedForSupport) || normalizedForSupport.includes('✓') || normalizedForSupport.includes('✔')) {
+    return { supported: true, known: true };
+  }
+
+  if (normalizedForSupport.includes('partial') || normalizedForSupport.includes('limited')) {
+    return { supported: true, known: true };
+  }
+
+  return { supported: false, known: false };
+}
+
+function splitMarkdownTableLine(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((value) => value.trim())
+    .map(cleanCellText);
+}
+
+function cleanCellText(value: string): string {
+  return stripMarkdown(value.replace(/`/g, ' ')).trim();
+}
+
+function isSupportedStatus(text: string): boolean {
+  const support = parseSupportText(text);
+  return support.known && support.supported;
+}
+
+function cleanFeatureNameFromLine(value: string): string {
+  return stripMarkdown(value)
+    .replace(/^[-*+]\s*/, '')
+    .replace(/^\*\*|(\*\*)$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildFeatureRecordFromFeatureRow(
+  row: FeatureMatrixRow,
+  sourcePath: string,
+): FeatureRecord | null {
+  const featureName = normalizeText(row.name);
+  if (!featureName) {
+    return null;
+  }
+
+  const titleName = row.name.trim();
+  return {
+    featureName: titleName,
+    supported: row.supported,
+    requiresPro: row.requiresPro || sourcePath.includes('/pro/') || sourcePath.includes('pivot'),
+    stability: 'stable',
+    supportedFrameworks: detectFrameworksFromText(`${titleName} ${row.notes.join(' ')}`),
+    notes: row.notes.length > 0 ? row.notes : [`Reference: ${sourcePath}`],
+    relatedChunkIds: [],
+    relatedExampleIds: [],
+    aliases: [titleName.toLowerCase(), normalizeText(titleName).replace(/\s+/g, '-')]
+  };
+}
+
+function detectFrameworksFromText(value: string): Array<Exclude<DocumentChunk['framework'], undefined> | 'vanilla'> {
+  const normalized = normalizeText(value).toLowerCase();
+  const frameworks: Array<Exclude<DocumentChunk['framework'], undefined> | 'vanilla'> = [];
+  if (normalized.includes('react')) {
+    frameworks.push('react');
+  }
+  if (normalized.includes('vue')) {
+    frameworks.push('vue');
+  }
+  if (normalized.includes('angular')) {
+    frameworks.push('angular');
+  }
+  if (normalized.includes('svelte')) {
+    frameworks.push('svelte');
+  }
+
+  return frameworks.length > 0 ? frameworks : ['vanilla'];
+}
+
+function isSeparatorLine(value: string): boolean {
+  return /^\s*\|?\s*[-:|\s]+$/i.test(value.trim());
+}
+
+function isTableLine(value: string): boolean {
+  return value.includes('|') && value.trim().startsWith('|') && value.trim().endsWith('|');
 }
 
 async function getPackageVersions(): Promise<PackageVersions> {
@@ -252,7 +616,65 @@ function deriveFeatures(chunks: DocumentChunk[]): FeatureRecord[] {
 
   return [...groups.values()]
     .sort((left, right) => left.featureName.localeCompare(right.featureName))
-    .slice(0, 250);
+    .map((feature) => ({
+      ...feature,
+      aliases: unique(feature.aliases)
+    }));
+}
+
+function extractFeatureArtifacts(documents: SourceDocument[]): FeatureRecord[] {
+  const featureRecords: FeatureRecord[] = [];
+
+  for (const document of documents) {
+    if (document.featureArtifacts.length === 0) {
+      continue;
+    }
+
+    const chunk = document.chunk;
+    for (const artifact of document.featureArtifacts) {
+      featureRecords.push({
+        ...artifact,
+        relatedChunkIds: unique([...(artifact.relatedChunkIds || []), chunk.id]),
+        relatedExampleIds: artifact.relatedExampleIds
+      });
+    }
+  }
+
+  return featureRecords;
+}
+
+function mergeFeatureRecords(
+  inferred: FeatureRecord[],
+  explicit: FeatureRecord[],
+): FeatureRecord[] {
+  const featureMap = new Map<string, FeatureRecord>();
+
+  for (const feature of [...inferred, ...explicit]) {
+    const key = normalizeText(feature.featureName);
+    const existing = featureMap.get(key);
+
+    if (!existing) {
+      featureMap.set(key, {
+        ...feature,
+        aliases: unique(feature.aliases),
+        relatedChunkIds: feature.relatedChunkIds ?? [],
+        relatedExampleIds: feature.relatedExampleIds ?? []
+      });
+      continue;
+    }
+
+    existing.supported ||= feature.supported;
+    existing.requiresPro ||= feature.requiresPro;
+    existing.stability ??= feature.stability;
+    existing.supportedFrameworks = unique([...existing.supportedFrameworks, ...(feature.supportedFrameworks ?? ['vanilla'])]);
+    existing.relatedChunkIds = unique([...existing.relatedChunkIds, ...(feature.relatedChunkIds ?? [])]);
+    existing.relatedExampleIds = unique([...existing.relatedExampleIds, ...(feature.relatedExampleIds ?? [])]);
+    existing.aliases = unique([...existing.aliases, ...feature.aliases]);
+    existing.notes = unique([...(existing.notes ?? []), ...(feature.notes ?? [])]);
+    existing.fallbackApproach = existing.fallbackApproach ?? feature.fallbackApproach;
+  }
+
+  return [...featureMap.values()].sort((left, right) => left.featureName.localeCompare(right.featureName));
 }
 
 function deriveMigrations(
@@ -395,18 +817,33 @@ function hasFrameworkSignal(value: string, normalizedPath: string, framework: st
 
 function detectSurface(source: SourceFile, title: string, content: string): DocumentChunk['surface'] {
   const value = `${source.relativePath} ${title} ${content}`.toLowerCase();
+  const normalizedPath = source.relativePath.replace(/\\/g, '/').toLowerCase();
 
   if (source.category === 'changelog') {
     return value.includes('migration') || source.relativePath.includes('/migrations/') ? 'migration' : 'changelog';
   }
+  if (value.includes('columntype')) {
+    return 'columntype';
+  }
   if (value.includes('pivot')) {
     return 'pivot';
   }
-  if (value.includes('plugin') || source.relativePath.includes('release/plugins')) {
+  if (value.includes('plugin') || normalizedPath.includes('release/plugins') || normalizedPath.includes('/plugins/')) {
     return 'plugin';
   }
-  if (value.includes('column-type') || value.includes('column type')) {
-    return 'columntype';
+  if (
+    normalizedPath.includes('/src/') ||
+    normalizedPath.includes('/test/') ||
+    normalizedPath.includes('/scripts/') ||
+    normalizedPath.endsWith('.ts') ||
+    normalizedPath.endsWith('.tsx') ||
+    normalizedPath.endsWith('.js') ||
+    normalizedPath.endsWith('.jsx') ||
+    normalizedPath.endsWith('.vue') ||
+    normalizedPath.endsWith('.svelte') ||
+    normalizedPath.endsWith('.astro')
+  ) {
+    return 'internal';
   }
   if (source.repository === 'revogrid-pro') {
     return 'pro';

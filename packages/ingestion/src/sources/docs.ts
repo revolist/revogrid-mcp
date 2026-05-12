@@ -1,18 +1,19 @@
 import { collectSourceFiles, resolveSourceRoot } from './_shared.js';
+import { REVOGRID_DOC_PATHS, REVOGRID_PRO_DOC_PATHS } from './sourceMap.js';
+
+const IS_DOC_FILE = /\.(?:md|mdx)$/i;
 
 export async function getDocsSources() {
   const revogridRoot = await resolveSourceRoot(import.meta.url, 'revogrid');
   const revogridProRoot = await resolveSourceRoot(import.meta.url, 'revogrid-pro');
 
   const [publicDocs, proDocs] = await Promise.all([
-    collectSourceFiles(revogridRoot, 'docs', ['docs/guide', 'docs/index.md']),
-    collectSourceFiles(revogridProRoot, 'docs', [
-      'src/content/docs',
-      'packages/portal/src/content/docs',
-      'packages/pro/README.md',
-      'packages/enterprise/plugins/pivot/PIVOT_FEATURES.md',
-      'packages/enterprise/plugins/gantt/GANTT_FEATURES.md'
-    ])
+    collectSourceFiles(revogridRoot, 'docs', [...REVOGRID_DOC_PATHS], {
+      fileFilter: (relativePath) => IS_DOC_FILE.test(relativePath)
+    }),
+    collectSourceFiles(revogridProRoot, 'docs', [...REVOGRID_PRO_DOC_PATHS], {
+      fileFilter: (relativePath) => IS_DOC_FILE.test(relativePath)
+    })
   ]);
 
   return [...publicDocs, ...proDocs];

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { SeedDataset } from '@revogrid-mcp/content-model';
+import type { DocumentChunk } from '@revogrid-mcp/content-model';
 import { buildCatalogDataset, buildSeedDataset } from '@revogrid-mcp/ingestion';
 
 import { hybridSearch } from '../src/retrieval/hybridSearch.js';
@@ -59,6 +60,49 @@ describe('retrieval filters', () => {
     const second = hybridSearch('beforeedit', chunks, filters).map((match) => match.chunk.id);
 
     expect(first).toEqual(second);
+  });
+
+  it('respects explicit surface filters for internal references', async () => {
+    const chunks: DocumentChunk[] = [
+      {
+        id: 'revogrid-internal-flag',
+        title: 'Internal source helper',
+        body: 'Source helper APIs available for internal troubleshooting.',
+        summary: 'Internal API surface',
+        framework: 'vanilla',
+        surface: 'internal',
+        docType: 'api',
+        version: '5.2.0',
+        requiresPro: false,
+        symbols: ['internal'],
+        stability: 'stable',
+        url: 'https://rv-grid.com/internal/flag',
+        sourcePath: 'revogrid/src/internal/flag.ts',
+      },
+      {
+        id: 'revogrid-core-flag',
+        title: 'Public source helper',
+        body: 'Source helper APIs available for public usage.',
+        summary: 'Core API surface',
+        framework: 'vanilla',
+        surface: 'core',
+        docType: 'api',
+        version: '5.2.0',
+        requiresPro: false,
+        symbols: ['public'],
+        stability: 'stable',
+        url: 'https://rv-grid.com/core/flag',
+        sourcePath: 'revogrid/src/public/flag.ts'
+      }
+    ];
+    const internalOnly = hybridSearch('source helper', chunks, {
+      surface: 'internal',
+      limit: 10,
+      entitlement: 'anonymous'
+    });
+
+    expect(internalOnly).toHaveLength(1);
+    expect(internalOnly[0]?.chunk.id).toBe('revogrid-internal-flag');
   });
 });
 

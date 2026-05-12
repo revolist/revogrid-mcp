@@ -15,6 +15,7 @@ export type QueryAnalysis = {
   wantsApi: boolean;
   wantsSetup: boolean;
   wantsEvent: boolean;
+  wantsImplementation: boolean;
   searchIntent: SearchIntent;
 };
 
@@ -54,7 +55,10 @@ const TOKEN_ALIASES: Record<string, string[]> = {
   installing: ['install', 'setup'],
   setup: ['install', 'getting', 'started'],
   start: ['started', 'setup'],
-  started: ['getting', 'setup']
+  started: ['getting', 'setup'],
+  inspect: ['internal', 'implementation', 'source'],
+  internals: ['implementation', 'source', 'core'],
+  source: ['internal', 'implementation', 'internals']
 };
 
 export function analyzeQuery(query: string, searchIntent: SearchIntent = 'docs'): QueryAnalysis {
@@ -66,6 +70,14 @@ export function analyzeQuery(query: string, searchIntent: SearchIntent = 'docs')
   const wantsApi = tokens.some((token) => token === 'api' || token === 'type' || token === 'types' || token === 'interface');
   const wantsSetup = tokens.some((token) => token === 'setup' || token === 'install' || token === 'started' || token === 'getting');
   const wantsEvent = tokens.some((token) => token === 'event' || token === 'events' || token.endsWith('event'));
+  const wantsImplementation = tokens.some(
+    (token) =>
+      token === 'implementation' ||
+      token === 'implement' ||
+      token === 'internal' ||
+      token === 'internals' ||
+      token === 'source'
+  );
 
   return {
     normalized,
@@ -77,6 +89,7 @@ export function analyzeQuery(query: string, searchIntent: SearchIntent = 'docs')
     wantsApi,
     wantsSetup,
     wantsEvent,
+    wantsImplementation,
     searchIntent
   };
 }
@@ -125,6 +138,15 @@ export function scoreIntentBoost(
       score -= 8;
     }
   } else {
+    if (analysis.wantsImplementation) {
+      if (chunk.surface === 'internal' || chunk.surface === 'plugin' || chunk.surface === 'pro') {
+        score += 12;
+        reasons.push('implementation intent');
+      } else if (chunk.surface === 'core' || chunk.surface === 'pivot' || chunk.surface === 'changelog' || chunk.surface === 'migration') {
+        score -= 4;
+      }
+    }
+
     if (chunk.docType === 'guide') {
       score += 18;
       reasons.push('guide intent');

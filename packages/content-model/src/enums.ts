@@ -8,7 +8,8 @@ export const surfaces = [
   'plugin',
   'columntype',
   'migration',
-  'changelog'
+  'changelog',
+  'internal'
 ] as const;
 export const docTypes = ['guide', 'api', 'example', 'live-demo', 'migration', 'faq'] as const;
 export const stabilities = ['stable', 'experimental', 'deprecated'] as const;

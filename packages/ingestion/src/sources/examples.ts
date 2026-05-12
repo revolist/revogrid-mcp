@@ -1,19 +1,14 @@
 import { collectSourceFiles, resolveSourceRoot } from './_shared.js';
+import { REVOGRID_EXAMPLE_PATHS, REVOGRID_PRO_EXAMPLE_PATHS } from './sourceMap.js';
 
 export async function getExampleSources() {
   const revogridRoot = await resolveSourceRoot(import.meta.url, 'revogrid');
   const revogridProRoot = await resolveSourceRoot(import.meta.url, 'revogrid-pro');
 
   const [publicExamples, proDemoContent, proComponentExamples] = await Promise.all([
-    collectSourceFiles(revogridRoot, 'examples', ['docs/demo', 'packages/react/demo', 'packages/vue3/demo']),
+    collectSourceFiles(revogridRoot, 'examples', [...REVOGRID_EXAMPLE_PATHS]),
+    collectSourceFiles(revogridProRoot, 'examples', [...REVOGRID_PRO_EXAMPLE_PATHS]),
     collectSourceFiles(revogridProRoot, 'examples', [
-      'src/content/demo',
-      'packages/portal/src/content/demo',
-      'packages/demos/src/catalog',
-      'packages/examples/src/core-examples'
-    ]),
-    collectSourceFiles(revogridProRoot, 'examples', [
-      'src/components',
       'packages/portal/src/components',
       'packages/demos/src/components',
       'packages/examples/src/components'

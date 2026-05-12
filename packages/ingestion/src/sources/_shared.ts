@@ -25,6 +25,28 @@ const TEXT_EXTENSIONS = new Set([
   '.astro'
 ]);
 
+const EXCLUDED_DIRECTORY_NAMES = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'coverage',
+  '.cache',
+  '.tmp',
+  'tmp',
+  '.turbo',
+  '.next',
+  '.nuxt',
+  'out',
+  '.vitepress',
+  '.github',
+  '.storybook'
+]);
+
+type SourceCollectionOptions = {
+  fileFilter?: (relativePath: string, absolutePath: string) => boolean;
+};
+
 type RootConfig = {
   repository: SourceRepository;
   envVar: 'REVOGRID_SOURCE_ROOT' | 'REVOGRID_PRO_SOURCE_ROOT';
@@ -99,6 +121,7 @@ export async function collectSourceFiles(
   root: SourceRoot,
   category: SourceCategory,
   relativeDirectories: string[],
+  options: SourceCollectionOptions = {},
 ): Promise<SourceFile[]> {
   if (!root.exists) {
     return [];
@@ -107,46 +130,93 @@ export async function collectSourceFiles(
   const files: SourceFile[] = [];
 
   for (const relativeDirectory of relativeDirectories) {
-    const absoluteDirectory = path.join(root.rootPath, relativeDirectory);
-    if (!(await pathExists(absoluteDirectory))) {
-      continue;
-    }
+    const candidates = await resolveSourceDirectoryCandidates(root.rootPath, relativeDirectory);
 
-    const sourcePaths = (await isDirectory(absoluteDirectory))
-      ? await walkDirectory(absoluteDirectory)
-      : [absoluteDirectory];
-
-    for (const absolutePath of sourcePaths) {
-      const extension = path.extname(absolutePath).toLowerCase();
-      if (!TEXT_EXTENSIONS.has(extension)) {
+    for (const candidate of candidates) {
+      if (!(await pathExists(candidate))) {
         continue;
       }
 
-      const relativePath = path.relative(root.rootPath, absolutePath);
-      files.push({
-        category,
-        repository: root.repository,
-        absolutePath,
-        relativePath,
-        rootPath: root.rootPath,
-        source: root.source,
-        requiresPro: inferRequiresPro(root.repository, relativePath)
-      });
+      const sourcePaths = (await isDirectory(candidate))
+        ? await walkDirectory(candidate, path.relative(root.rootPath, candidate))
+        : [candidate];
+
+      for (const absolutePath of sourcePaths) {
+        const extension = path.extname(absolutePath).toLowerCase();
+        if (!TEXT_EXTENSIONS.has(extension)) {
+          continue;
+        }
+
+        const relativePath = path
+          .relative(root.rootPath, absolutePath)
+          .replace(/\\/g, '/');
+        if (options.fileFilter && !options.fileFilter(relativePath, absolutePath)) {
+          continue;
+        }
+
+        files.push({
+          category,
+          repository: root.repository,
+          absolutePath,
+          relativePath,
+          rootPath: root.rootPath,
+          source: root.source,
+          requiresPro: inferRequiresPro(root.repository, relativePath)
+        });
+      }
     }
   }
 
   return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-async function walkDirectory(directoryPath: string): Promise<string[]> {
+async function resolveSourceDirectoryCandidates(
+  rootPath: string,
+  includePath: string,
+): Promise<string[]> {
+  const normalizedIncludePath = includePath.replace(/\\/g, '/');
+  const wildcardToken = '/**/';
+
+  if (!normalizedIncludePath.includes(wildcardToken)) {
+    return [path.join(rootPath, includePath)];
+  }
+
+  const splitParts = normalizedIncludePath.split(wildcardToken);
+  const prefix = splitParts[0] ?? '';
+  const suffix = splitParts[1] ?? '';
+  const basePath = path.join(rootPath, prefix);
+  const suffixPath = (suffix ?? '').replace(/^\//, '');
+
+  if (!(await pathExists(basePath))) {
+    return [];
+  }
+
+  const allEntries = await walkDirectory(basePath, path.relative(rootPath, basePath));
+  if (!suffixPath) {
+    return allEntries;
+  }
+
+  return allEntries.filter((absolutePath) => {
+    const relativePath = path.relative(basePath, absolutePath).replace(/\\/g, '/');
+    return relativePath.endsWith(suffixPath);
+  });
+}
+
+async function walkDirectory(
+  directoryPath: string,
+  relativeDirectoryPath: string,
+): Promise<string[]> {
   const entries = await readdir(directoryPath, { withFileTypes: true });
   const files = await Promise.all(
     entries
-      .filter((entry) => !entry.name.startsWith('.') && entry.name !== 'node_modules')
+      .filter((entry) => shouldIncludeDirectoryEntry(entry.name))
       .map(async (entry) => {
         const absolutePath = path.join(directoryPath, entry.name);
         if (entry.isDirectory()) {
-          return walkDirectory(absolutePath);
+          return walkDirectory(
+            absolutePath,
+            path.join(relativeDirectoryPath, entry.name).replace(/\\/g, '/'),
+          );
         }
 
         return [absolutePath];
@@ -154,6 +224,15 @@ async function walkDirectory(directoryPath: string): Promise<string[]> {
   );
 
   return files.flat();
+}
+
+function shouldIncludeDirectoryEntry(name: string): boolean {
+  const normalized = name.toLowerCase();
+  if (normalized.startsWith('.')) {
+    return false;
+  }
+
+  return !EXCLUDED_DIRECTORY_NAMES.has(normalized);
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {

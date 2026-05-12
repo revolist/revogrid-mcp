@@ -7,6 +7,8 @@ import { handleFindExamples } from '../src/mcp/tools/findExamples.js';
 import { handleGetMigrationNotes } from '../src/mcp/tools/getMigrationNotes.js';
 import { handleResolveFeatureMatrix } from '../src/mcp/tools/resolveFeatureMatrix.js';
 import { handleSearchRevogridDocs } from '../src/mcp/tools/searchRevogridDocs.js';
+import { readFeatureMatrixResource } from '../src/mcp/resources/featureMatrix.js';
+import { readCatalogCoverageResource } from '../src/mcp/resources/versions.js';
 import { InMemoryContentRepository } from '../src/repositories/inMemoryContentRepository.js';
 import { DefaultFeatureMatrixService } from '../src/services/featureService.js';
 import { DefaultMigrationService } from '../src/services/migrationService.js';
@@ -127,6 +129,183 @@ describe('MCP tool handlers', () => {
     expect(result.requiresPro).toBe(true);
     expect(result.bestDocs).toEqual([]);
     expect(result.bestExamples).toEqual([]);
+  });
+
+  it('keeps explicit internal feature artifacts hidden from anonymous detail views', async () => {
+    const services = createTestServices({
+      chunks: [
+        {
+          id: 'revogrid-src-internal-audit',
+          title: 'Internal audit API',
+          body: 'Audit helper for internal diagnostics.',
+          summary: 'Internal implementation API.',
+          framework: 'vanilla',
+          surface: 'internal',
+          docType: 'api',
+          version: '5.2.0',
+          requiresPro: true,
+          symbols: ['internal', 'audit'],
+          stability: 'stable',
+          url: 'https://pro.rv-grid.com/api/internal-audit'
+        }
+      ],
+      versions: [],
+      features: [
+        {
+          featureName: 'internal audit',
+          supported: true,
+          requiresPro: true,
+          supportedFrameworks: ['vanilla'],
+          notes: ['Internal feature from implementation artifact.'],
+          relatedChunkIds: ['revogrid-src-internal-audit'],
+          relatedExampleIds: [],
+          aliases: ['internal audit', 'audit']
+        }
+      ],
+      migrations: []
+    });
+
+    const result = await handleResolveFeatureMatrix(
+      {
+        featureName: 'internal audit'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+
+    expect(result.supported).toBe(true);
+    expect(result.requiresPro).toBe(true);
+    expect(result.bestDocs).toEqual([]);
+    expect(result.bestExamples).toEqual([]);
+  });
+
+  it('returns catalog coverage summary for anonymous users', async () => {
+    const coverage = await readCatalogCoverageResource(services, { entitlement: 'anonymous' });
+
+    expect(coverage.chunkCount).toBeGreaterThan(0);
+    expect(coverage.bySurface).toHaveProperty('core');
+    expect(coverage.byRepository).toHaveProperty('revogrid');
+  });
+
+  it('keeps anonymous feature matrix resources free of pro-only feature metadata', async () => {
+    const services = createTestServices({
+      chunks: [
+        {
+          id: 'guide-public-feature',
+          title: 'Public feature',
+          body: 'Public feature docs.',
+          summary: 'Public feature docs.',
+          framework: 'vanilla',
+          surface: 'core',
+          docType: 'guide',
+          version: '5.2.0',
+          requiresPro: false,
+          symbols: ['public'],
+          stability: 'stable',
+          url: 'https://rv-grid.com/guide/public',
+          sourcePath: 'revogrid/docs/guide/public.md'
+        },
+        {
+          id: 'guide-pro-feature',
+          title: 'Pro feature',
+          body: 'Pro feature docs.',
+          summary: 'Pro feature docs.',
+          framework: 'vanilla',
+          surface: 'pivot',
+          docType: 'guide',
+          version: '5.2.0',
+          requiresPro: true,
+          symbols: ['pro'],
+          stability: 'stable',
+          url: 'https://pro.rv-grid.com/pivot',
+          sourcePath: 'revogrid-pro/packages/enterprise/plugins/pivot/index.ts'
+        }
+      ],
+      versions: [],
+      features: [
+        {
+          featureName: 'public feature',
+          supported: true,
+          requiresPro: false,
+          supportedFrameworks: ['vanilla'],
+          notes: ['Public feature docs.'],
+          relatedChunkIds: ['guide-public-feature'],
+          relatedExampleIds: [],
+          aliases: ['public feature']
+        },
+        {
+          featureName: 'pro feature',
+          supported: true,
+          requiresPro: true,
+          supportedFrameworks: ['vanilla'],
+          notes: ['Pro feature docs.'],
+          relatedChunkIds: ['guide-pro-feature'],
+          relatedExampleIds: [],
+          aliases: ['pro feature']
+        }
+      ],
+      migrations: []
+    });
+
+    const matrix = await readFeatureMatrixResource(services, { entitlement: 'anonymous' });
+    const coverage = await readCatalogCoverageResource(services, { entitlement: 'anonymous' });
+
+    expect(matrix.map((feature) => feature.featureName)).toEqual(['public feature']);
+    expect(matrix[0]?.catalogCoverage.byRepository).not.toHaveProperty('revogrid-pro');
+    expect(coverage.byRepository).not.toHaveProperty('revogrid-pro');
+    expect(coverage.requiresProChunkCount).toBe(0);
+  });
+
+  it('keeps anonymous internal-surface searches off requires-pro implementation chunks', async () => {
+    const services = createTestServices({
+      chunks: [
+        {
+          id: 'revogrid-internal-debug',
+          title: 'Internal debug API',
+          body: 'Internal debug helper.',
+          summary: 'Internal-only API chunk.',
+          framework: 'vanilla',
+          surface: 'internal',
+          docType: 'api',
+          version: '5.2.0',
+          requiresPro: true,
+          symbols: ['debug'],
+          stability: 'stable',
+          url: 'https://pro.rv-grid.com/api/debug',
+          sourcePath: 'revogrid/src/internal/debug.ts'
+        },
+        {
+          id: 'revogrid-internal-helper',
+          title: 'Internal helper API',
+          body: 'Public-safe internal helper.',
+          summary: 'Internal public implementation API.',
+          framework: 'vanilla',
+          surface: 'internal',
+          docType: 'api',
+          version: '5.2.0',
+          requiresPro: false,
+          symbols: ['helper'],
+          stability: 'stable',
+          url: 'https://rv-grid.com/api/helper',
+          sourcePath: 'revogrid/src/internal/helper.ts'
+        }
+      ],
+      versions: [],
+      features: [],
+      migrations: []
+    });
+
+    const result = await handleSearchRevogridDocs(
+      {
+        query: 'internal',
+        surface: 'internal'
+      },
+      services,
+      { entitlement: 'anonymous' },
+    );
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.id).toBe('revogrid-internal-helper');
   });
 
   it('returns a structured unsupported response for unknown features', async () => {

@@ -11,7 +11,11 @@ import type { AppServices, RequestContext } from '../types/catalog.js';
 import { registerPrompts } from './prompts/index.js';
 import { readFeatureMatrixResource } from './resources/featureMatrix.js';
 import { readGettingStartedResource } from './resources/gettingStarted.js';
-import { readAllVersionsResource, readLatestVersionResource } from './resources/versions.js';
+import {
+  readAllVersionsResource,
+  readCatalogCoverageResource,
+  readLatestVersionResource
+} from './resources/versions.js';
 import { handleFindExamples } from './tools/findExamples.js';
 import { handleGetMigrationNotes } from './tools/getMigrationNotes.js';
 import { handleResolveFeatureMatrix } from './tools/resolveFeatureMatrix.js';
@@ -110,6 +114,17 @@ export function createMcpServer(
       mimeType: 'application/json'
     },
     async (uri) => asResourceResponse(uri.href, await readAllVersionsResource(services, context)),
+  );
+
+  server.registerResource(
+    'catalog-coverage',
+    'revogrid://catalog/coverage',
+    {
+      title: 'Indexed Catalog Coverage',
+      description: 'Summary of indexed chunk coverage by repository, surface, doc type, and path.',
+      mimeType: 'application/json'
+    },
+    async (uri) => asResourceResponse(uri.href, await readCatalogCoverageResource(services, context)),
   );
 
   server.registerResource(
