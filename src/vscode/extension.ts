@@ -16,7 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
   const provider: vscode.McpServerDefinitionProvider<vscode.McpHttpServerDefinition> = {
     provideMcpServerDefinitions: () => createServerDefinitions(variant, extensionVersion),
     resolveMcpServerDefinition: async (server, token) => {
-      if (server.label !== PRO_SERVER_LABEL) {
+      if (variant !== 'pro' || server.label !== PRO_SERVER_LABEL) {
         return server;
       }
 
