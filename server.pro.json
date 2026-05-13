@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.revolist/revogrid-mcp-pro",
+  "title": "RevoGrid DataGrid MCP Pro",
+  "description": "Hosted Pro MCP server for RevoGrid DataGrid docs, examples, feature checks, and migration guidance.",
+  "status": "active",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/revolist/revogrid",
+    "source": "github"
+  },
+  "homepage": "https://mcp.rv-grid.com/pro",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.rv-grid.com/pro"
+    }
+  ]
+}

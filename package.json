@@ -95,8 +95,10 @@
     "reindex": "tsx scripts/reindex.ts",
     "derive:token": "tsx scripts/deriveToken.ts",
     "backfill:symbols": "tsx scripts/backfillSymbols.ts",
-    "vscode:package": "vsce package --no-dependencies",
-    "vscode:publish": "vsce publish --no-dependencies"
+    "vscode:package": "pnpm build && vsce package --no-dependencies",
+    "vscode:publish": "pnpm build && vsce publish --no-dependencies",
+    "vscode:package:pro": "pnpm build && tsx scripts/packageVscodeVariant.ts package",
+    "vscode:publish:pro": "pnpm build && tsx scripts/packageVscodeVariant.ts publish"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",

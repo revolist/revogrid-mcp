@@ -83,8 +83,22 @@ The server provides indexed chunks for:
 - Codex: `codex mcp add revogrid --url https://mcp.rv-grid.com`
 - Cursor: add `https://mcp.rv-grid.com` under `mcpServers` in `.cursor/mcp.json`
 - VS Code:
-  - `https://mcp.rv-grid.com`
-  - `https://mcp.rv-grid.com/pro` (Pro route)
+  - Public package: `RevoGrid DataGrid MCP`, endpoint `https://mcp.rv-grid.com`
+  - Pro package: `RevoGrid DataGrid MCP Pro`, endpoint `https://mcp.rv-grid.com/pro`
+
+The public VS Code package does not prompt for a bearer token. Install the Pro package only for Pro-gated retrieval; that package asks for a bearer token before connecting to `/pro`.
+
+## Maintainer packaging
+
+```bash
+pnpm vscode:package
+pnpm vscode:package:pro
+```
+
+```bash
+pnpm vscode:publish
+pnpm vscode:publish:pro
+```
 
 ## Manual MCP tests
 

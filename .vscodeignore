@@ -22,7 +22,7 @@ docker-compose.yml
 eslint.config.mjs
 pnpm-lock.yaml
 pnpm-workspace.yaml
-server.json
+server*.json
 tsconfig*.json
 vitest.config.ts
 dist/**

@@ -45,6 +45,8 @@ jobs:
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
           jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' server.json > server.tmp.json
           mv server.tmp.json server.json
+          jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' server.pro.json > server.pro.tmp.json
+          mv server.pro.tmp.json server.pro.json
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -61,8 +63,13 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish signed VS Code extension
+      - name: Publish public VS Code extension
         run: pnpm exec vsce publish --no-dependencies --skip-duplicate
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish Pro VS Code extension
+        run: pnpm exec tsx scripts/packageVscodeVariant.ts publish --skip-duplicate
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
@@ -73,5 +80,8 @@ jobs:
       - name: Authenticate to MCP Registry
         run: ./mcp-publisher login github-oidc
 
-      - name: Publish to MCP Registry
-        run: ./mcp-publisher publish
+      - name: Publish public MCP Registry manifest
+        run: ./mcp-publisher publish server.json
+
+      - name: Publish Pro MCP Registry manifest
+        run: ./mcp-publisher publish server.pro.json
