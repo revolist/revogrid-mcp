@@ -1,9 +1,6 @@
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 import { parseEnv } from '@revogrid-mcp/shared';
-
-const DEFAULT_WEBHOOK_TOKEN = 'dev-webhook-token';
 
 const booleanFromEnv = z.preprocess((value) => {
   if (typeof value === 'boolean') {
@@ -51,7 +48,10 @@ const AppEnvSchema = z.object({
   RATE_LIMIT_WINDOW_MS: integerFromEnv.default(60_000),
   ENABLE_PRO_ROUTE_AUTH: booleanFromEnv.default(false),
   AUTH_JWT_SECRET: z.string().optional(),
-  WEBHOOK_TOKEN: z.string().default(DEFAULT_WEBHOOK_TOKEN),
+  WEBHOOK_TOKEN: z.string({
+    required_error: 'WEBHOOK_TOKEN is required.',
+    invalid_type_error: 'WEBHOOK_TOKEN is required.'
+  }).min(1, 'WEBHOOK_TOKEN is required.'),
   SOURCE_UPDATE_GITHUB_TOKEN: z.string().optional(),
   GITHUB_TOKEN: z.string().optional()
 });
@@ -61,17 +61,8 @@ export type AppConfig = ReturnType<typeof loadConfig>;
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const parsed = parseEnv(AppEnvSchema, env);
 
-  // Derive WEBHOOK_TOKEN from AUTH_JWT_SECRET if not explicitly provided
-  let webhookToken = parsed.WEBHOOK_TOKEN;
-  if (webhookToken === DEFAULT_WEBHOOK_TOKEN && parsed.AUTH_JWT_SECRET) {
-    webhookToken = createHash('sha256')
-      .update(parsed.AUTH_JWT_SECRET + 'reindex-webhook-salt')
-      .digest('hex');
-  }
-
   return {
     ...parsed,
-    WEBHOOK_TOKEN: webhookToken,
     ALLOWED_ORIGINS: parsed.ALLOWED_ORIGINS.split(',')
       .map((origin) => origin.trim())
       .filter(Boolean)

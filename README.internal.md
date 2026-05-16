@@ -32,11 +32,11 @@ Examples:
 
 ```bash
 curl -X POST http://localhost:8787/hooks/reindex \
-     -H "X-Webhook-Token: dev-webhook-token"
+     -H "X-Webhook-Token: <your-webhook-token>"
 
 curl -X POST http://localhost:8787/hooks/reindex \
      -H "Content-Type: application/json" \
-     -H "X-Webhook-Token: dev-webhook-token" \
+     -H "X-Webhook-Token: <your-webhook-token>" \
      -d '{"updateSources":true}'
 ```
 
@@ -44,7 +44,7 @@ For private GitHub sources:
 - `SOURCE_UPDATE_GITHUB_TOKEN` (preferred)
 - fallback `GITHUB_TOKEN`
 
-`WEBHOOK_TOKEN` defaults to `dev-webhook-token` and can be derived from `AUTH_JWT_SECRET`:
+`WEBHOOK_TOKEN` is required. Generate a strong random value, or derive a stable value from `AUTH_JWT_SECRET`:
 
 ```bash
 pnpm derive:token

@@ -48,7 +48,8 @@ describe('http integration', () => {
     LOG_LEVEL: 'error',
     CONTENT_BACKEND: 'memory',
     ENABLE_RATE_LIMITING: 'false',
-    ENABLE_ORIGIN_VALIDATION: 'false'
+    ENABLE_ORIGIN_VALIDATION: 'false',
+    WEBHOOK_TOKEN: 'test-webhook-token'
   });
 
   let app: ReturnType<typeof createApp>;
@@ -223,7 +224,8 @@ describe('/pro auth integration', () => {
     ENABLE_RATE_LIMITING: 'false',
     ENABLE_ORIGIN_VALIDATION: 'false',
     ENABLE_PRO_ROUTE_AUTH: 'true',
-    AUTH_JWT_SECRET: secret
+    AUTH_JWT_SECRET: secret,
+    WEBHOOK_TOKEN: 'test-webhook-token'
   });
 
   let app: ReturnType<typeof createApp>;

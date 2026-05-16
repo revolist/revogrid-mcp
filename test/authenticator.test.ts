@@ -12,7 +12,7 @@ describe('request authenticator', () => {
           authorization: 'Bearer some-token'
         }
       } as never,
-      loadConfig({}),
+      loadConfig({ WEBHOOK_TOKEN: 'test-webhook-token' }),
     );
 
     expect(context.entitlement).toBe('anonymous');
@@ -22,7 +22,8 @@ describe('request authenticator', () => {
     const secret = 'test-jwt-secret';
     const config = loadConfig({
       ENABLE_PRO_ROUTE_AUTH: 'true',
-      AUTH_JWT_SECRET: secret
+      AUTH_JWT_SECRET: secret,
+      WEBHOOK_TOKEN: 'test-webhook-token'
     });
     const token = jsonwebtoken.sign(
       {
@@ -50,7 +51,8 @@ describe('request authenticator', () => {
   it('rejects /pro requests without a bearer token when auth is enabled', () => {
     const config = loadConfig({
       ENABLE_PRO_ROUTE_AUTH: 'true',
-      AUTH_JWT_SECRET: 'test-jwt-secret'
+      AUTH_JWT_SECRET: 'test-jwt-secret',
+      WEBHOOK_TOKEN: 'test-webhook-token'
     });
 
     expect(() =>
@@ -66,7 +68,8 @@ describe('request authenticator', () => {
   it('rejects /pro requests with an invalid bearer jwt token', () => {
     const config = loadConfig({
       ENABLE_PRO_ROUTE_AUTH: 'true',
-      AUTH_JWT_SECRET: 'test-jwt-secret'
+      AUTH_JWT_SECRET: 'test-jwt-secret',
+      WEBHOOK_TOKEN: 'test-webhook-token'
     });
 
     expect(() =>
@@ -86,7 +89,7 @@ describe('request authenticator', () => {
       {
         headers: {}
       } as never,
-      loadConfig({}),
+      loadConfig({ WEBHOOK_TOKEN: 'test-webhook-token' }),
     );
 
     expect(context.entitlement).toBe('paid_pro');
