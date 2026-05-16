@@ -173,7 +173,7 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'packages/portal/src/content/docs/api/pivot.md',
+        'apps/portal/src/content/docs/api/pivot.md',
         [
           '---',
           'title: Pivot',
@@ -187,7 +187,7 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'packages/portal/src/content/demo/pivot.mdx',
+        'apps/portal/src/content/demo/pivot.mdx',
         [
           '---',
           'title: Pivot Demo',
@@ -223,7 +223,7 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'packages/demos/src/components/pivot/Pivot.tsx',
+        'examples/components/src/components/pivot/Pivot.tsx',
         [
           'import { PivotPlugin } from "@revolist/revogrid-pro";',
           '',
@@ -234,8 +234,19 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
-        'packages/demos/src/components/overrides/Header.astro',
+        'examples/components/src/components/overrides/Header.astro',
         '<header>Should be ignored</header>',
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'examples/core/src/core-examples/start/index.ts',
+        [
+          'import { RevoGrid } from "@revolist/revogrid";',
+          '',
+          'export const columns = [{ prop: "name", name: "Name" }];',
+          'export const source = [{ name: "RevoGrid" }];',
+          'export default RevoGrid;'
+        ].join('\n'),
       ),
       writeFixtureFile(
         revogridProRoot,
@@ -398,20 +409,32 @@ describe.sequential('buildCatalogDataset', () => {
     const sources = await getExampleSources();
 
     expect(
-      sources.some((source) => source.relativePath.includes('packages/demos/src/components/overrides/Header.astro')),
+      sources.some((source) => source.relativePath.includes('examples/components/src/components/overrides/Header.astro')),
     ).toBe(false);
-    expect(sources.some((source) => source.relativePath.includes('packages/demos/src/components/pivot/Pivot.tsx'))).toBe(
+    expect(sources.some((source) => source.relativePath.includes('examples/components/src/components/pivot/Pivot.tsx'))).toBe(
       true,
+    );
+    expect(sources.some((source) => source.relativePath.includes('examples/core/src/core-examples/start/index.ts'))).toBe(
+      true,
+    );
+    expect(sources.some((source) => source.relativePath.includes('packages/enterprise/plugins/pivot/index.ts'))).toBe(
+      false,
     );
   });
 
-  it('maps current pro package layout to pro urls and gated chunks', async () => {
+  it('maps current pro app and example layout to pro urls and gated chunks', async () => {
     const dataset = await buildCatalogDataset();
     const pivotApi = dataset.chunks.find(
-      (chunk) => chunk.sourcePath === 'revogrid-pro/packages/portal/src/content/docs/api/pivot.md',
+      (chunk) => chunk.sourcePath === 'revogrid-pro/apps/portal/src/content/docs/api/pivot.md',
     );
     const pivotDemo = dataset.chunks.find(
-      (chunk) => chunk.sourcePath === 'revogrid-pro/packages/portal/src/content/demo/pivot.mdx',
+      (chunk) => chunk.sourcePath === 'revogrid-pro/apps/portal/src/content/demo/pivot.mdx',
+    );
+    const pivotExample = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid-pro/examples/components/src/components/pivot/Pivot.tsx',
+    );
+    const coreExample = dataset.chunks.find(
+      (chunk) => chunk.sourcePath === 'revogrid-pro/examples/core/src/core-examples/start/index.ts',
     );
     const pivotPlugin = dataset.chunks.find(
       (chunk) => chunk.sourcePath === 'revogrid-pro/packages/enterprise/plugins/pivot/index.ts',
@@ -425,7 +448,18 @@ describe.sequential('buildCatalogDataset', () => {
       requiresPro: true,
       url: 'https://pro.rv-grid.com/demo/pivot'
     });
+    expect(pivotExample).toMatchObject({
+      docType: 'example',
+      requiresPro: true,
+      url: 'https://pro.rv-grid.com/demo/pivot'
+    });
+    expect(coreExample).toMatchObject({
+      docType: 'example',
+      requiresPro: true,
+      url: 'https://pro.rv-grid.com/demo/start'
+    });
     expect(pivotPlugin).toMatchObject({
+      docType: 'api',
       requiresPro: true,
       url: 'https://pro.rv-grid.com/api/pivot'
     });

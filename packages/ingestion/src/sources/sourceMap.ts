@@ -30,41 +30,29 @@ export const REVOGRID_API_PATHS = [
 ] as const;
 
 export const REVOGRID_PRO_DOC_PATHS = [
-  'src/content/docs',
-  'packages/portal/src/content/docs',
-  'packages/portal/src/content/legal',
+  'apps/portal/src/content/docs',
+  'apps/portal/src/content/demo',
+  'apps/portal/src/content/legal',
   'packages/**/README.md',
-  'packages/pro',
-  'packages/enterprise',
-  'packages/pro/plugins',
-  'packages/enterprise/plugins',
   'packages/enterprise/plugins/pivot/PIVOT_FEATURES.md',
   'packages/enterprise/plugins/gantt/GANTT_FEATURES.md',
   'packages/enterprise/plugins/pivot/PIVOT_QUICK_WINS.md'
 ] as const;
 
 export const REVOGRID_PRO_EXAMPLE_PATHS = [
-  'src/content/demo',
-  'packages/portal/src/content/demo',
-  'packages/examples/src/core-examples',
-  'packages/pro/plugins',
-  'packages/enterprise/plugins',
-  'packages/demos/src/catalog'
+  'examples/core/src/core-examples',
+  'examples/components/src/components'
 ] as const;
 
 export const REVOGRID_PRO_API_PATHS = [
-  'src',
-  'src/content/docs',
+  'apps/portal/src/components',
+  'apps/demos/src/catalog',
+  'apps/demos/src/components',
   'test',
   'scripts',
-  'packages/portal/src/content/docs',
-  'packages/portal/src/content/legal',
   'packages/pro',
   'packages/enterprise',
   'packages/pro/plugins',
   'packages/enterprise/plugins',
-  'release/plugins',
-  'packages/portal/src/components',
-  'packages/demos/src/components',
-  'packages/examples/src/components'
+  'release/plugins'
 ] as const;

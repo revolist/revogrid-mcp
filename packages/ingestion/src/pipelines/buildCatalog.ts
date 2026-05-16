@@ -912,24 +912,24 @@ function buildCanonicalUrl(source: SourceFile): string {
   }
 
   if (source.repository === 'revogrid-pro') {
-    if (normalizedPath.startsWith('src/content/docs/')) {
-      return `https://pro.rv-grid.com/${trimIndex(stripExtension(normalizedPath.replace(/^src\/content\/docs\//, '')))}`
+    if (normalizedPath.startsWith('apps/portal/src/content/docs/')) {
+      return `https://pro.rv-grid.com/${trimIndex(stripExtension(normalizedPath.replace(/^apps\/portal\/src\/content\/docs\//, '')))}`
         .replace(/\/$/, '');
     }
 
-    if (normalizedPath.startsWith('packages/portal/src/content/docs/')) {
-      return `https://pro.rv-grid.com/${trimIndex(stripExtension(normalizedPath.replace(/^packages\/portal\/src\/content\/docs\//, '')))}`
+    if (normalizedPath.startsWith('apps/portal/src/content/demo/')) {
+      return `https://pro.rv-grid.com/demo/${trimIndex(stripExtension(normalizedPath.replace(/^apps\/portal\/src\/content\/demo\//, '')))}`
         .replace(/\/$/, '');
     }
 
-    if (normalizedPath.startsWith('src/content/demo/')) {
-      return `https://pro.rv-grid.com/demo/${trimIndex(stripExtension(normalizedPath.replace(/^src\/content\/demo\//, '')))}`
-        .replace(/\/$/, '');
+    if (normalizedPath.startsWith('examples/core/src/core-examples/')) {
+      const slug = normalizedPath.split('/')[4] ?? 'demo';
+      return `https://pro.rv-grid.com/demo/${slug}`;
     }
 
-    if (normalizedPath.startsWith('packages/portal/src/content/demo/')) {
-      return `https://pro.rv-grid.com/demo/${trimIndex(stripExtension(normalizedPath.replace(/^packages\/portal\/src\/content\/demo\//, '')))}`
-        .replace(/\/$/, '');
+    if (normalizedPath.startsWith('examples/components/src/components/')) {
+      const slug = normalizedPath.split('/')[4] ?? 'demo';
+      return `https://pro.rv-grid.com/demo/${slug}`;
     }
 
     if (normalizedPath.startsWith('release/plugins/')) {
@@ -942,22 +942,16 @@ function buildCanonicalUrl(source: SourceFile): string {
       return `https://pro.rv-grid.com/api/${segments[pluginIndex + 1] ?? 'plugin'}`;
     }
 
-    if (normalizedPath.startsWith('src/components/')) {
-      const slug = normalizedPath.split('/')[2] ?? 'demo';
-      return `https://pro.rv-grid.com/demo/${slug}`;
-    }
-
     if (
-      normalizedPath.startsWith('packages/portal/src/components/') ||
-      normalizedPath.startsWith('packages/demos/src/components/') ||
-      normalizedPath.startsWith('packages/examples/src/components/')
+      normalizedPath.startsWith('apps/portal/src/components/') ||
+      normalizedPath.startsWith('apps/demos/src/components/')
     ) {
       const segments = normalizedPath.split('/');
       const componentIndex = segments.indexOf('components');
       return `https://pro.rv-grid.com/demo/${segments[componentIndex + 1] ?? 'demo'}`;
     }
 
-    if (normalizedPath.startsWith('packages/demos/src/catalog/')) {
+    if (normalizedPath.startsWith('apps/demos/src/catalog/')) {
       return 'https://pro.rv-grid.com/demo';
     }
   }

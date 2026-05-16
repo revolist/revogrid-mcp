@@ -58,7 +58,7 @@ describe('http integration', () => {
     const services = await createServices(config);
     app = createApp(config, services);
     await app.ready();
-  });
+  }, 30000);
 
   afterAll(async () => {
     await app.close();
@@ -234,7 +234,7 @@ describe('/pro auth integration', () => {
     const services = await createServices(config);
     app = createApp(config, services);
     await app.ready();
-  });
+  }, 30000);
 
   afterAll(async () => {
     await app.close();

@@ -104,6 +104,58 @@ describe('MCP tool handlers', () => {
     expect(result.results[0]?.id).toBe('example-pivot-demo');
   });
 
+  it('does not return pro plugin source files from find_examples', async () => {
+    const dataset = buildSeedDataset();
+    const services = createTestServices({
+      ...dataset,
+      chunks: [
+        ...dataset.chunks,
+        {
+          id: 'revogrid-pro-packages-enterprise-plugins-pivot-index',
+          title: 'Pivot plugin source',
+          body: 'PivotPlugin source implementation for pivot feature internals.',
+          summary: 'Pivot plugin source implementation.',
+          surface: 'pivot',
+          docType: 'api',
+          version: '1.5.20',
+          requiresPro: true,
+          symbols: ['PivotPlugin'],
+          stability: 'stable',
+          url: 'https://pro.rv-grid.com/api/pivot',
+          sourcePath: 'revogrid-pro/packages/enterprise/plugins/pivot/index.ts'
+        },
+        {
+          id: 'revogrid-pro-examples-components-pivot',
+          title: 'Pivot example',
+          body: 'Runnable pivot feature example from the examples package.',
+          summary: 'Runnable pivot example.',
+          surface: 'pivot',
+          docType: 'example',
+          version: '1.5.20',
+          requiresPro: true,
+          symbols: ['PivotPlugin'],
+          stability: 'stable',
+          url: 'https://pro.rv-grid.com/demo/pivot',
+          sourcePath: 'revogrid-pro/examples/components/src/components/pivot/Pivot.tsx'
+        }
+      ]
+    });
+
+    const result = await handleFindExamples(
+      {
+        query: 'pivot feature',
+        surface: 'pivot'
+      },
+      services,
+      { entitlement: 'paid_pro' },
+    );
+
+    expect(result.results.map((item) => item.id)).toContain('revogrid-pro-examples-components-pivot');
+    expect(result.results.map((item) => item.sourceUrl)).not.toContain(
+      'repo://revogrid-pro/packages/enterprise/plugins/pivot/index.ts',
+    );
+  });
+
   it('resolves beforeedit as a supported feature', async () => {
     const result = await handleResolveFeatureMatrix(
       {
