@@ -51,7 +51,7 @@ export function createMcpServer(
 ): McpServer {
   const server = new Server({
     name: 'revogrid-mcp',
-    version: '0.1.0'
+    version: '1.0.0'
   });
 
   server.registerTool(

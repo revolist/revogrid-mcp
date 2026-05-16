@@ -4,7 +4,7 @@
   "title": "RevoGrid DataGrid MCP Pro",
   "description": "Hosted Pro MCP server for RevoGrid DataGrid docs, examples, feature checks, and migration guidance.",
   "status": "active",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "repository": {
     "url": "https://github.com/revolist/revogrid",
     "source": "github"
