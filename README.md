@@ -1,15 +1,15 @@
 # RevoGrid MCP
 
-Hosted Streamable HTTP MCP server for version-aware RevoGrid retrieval. In v1 it is read-only and focuses on:
+Hosted Streamable HTTP MCP server for version-aware [RevoGrid](https://rv-grid.com) retrieval. RevoGrid is a JS Data Grid for high-performance, spreadsheet-like tables in modern web apps. In v1 this MCP server is read-only and focuses on:
 
-- current RevoGrid docs and examples
+- current [RevoGrid docs](https://github.com/revolist/revogrid) and [examples](https://demo.rv-grid.com)
 - version-aware migration guidance
 - feature availability and Pro gating
 - type-informed API symbols from RevoGrid TypeScript sources
 
 ## Why teams use RevoGrid
 
-RevoGrid is a JavaScript DataGrid built for modern data-heavy applications that need a responsive and controllable tabular experience:
+RevoGrid is a JavaScript Data Grid built for modern data-heavy applications that need a responsive and controllable tabular experience:
 
 - fast, large-data rendering for rich enterprise UIs
 - configurable columns, editors, and formatting for real-world business workflows
@@ -19,6 +19,17 @@ RevoGrid is a JavaScript DataGrid built for modern data-heavy applications that 
 
 - Website: `https://rv-grid.com`
 - GitHub: `https://github.com/revolist/revogrid`
+
+## Developer search tags
+
+Use these terms when searching docs, examples, or agent context for RevoGrid. Feature availability can vary by version and package; check the feature matrix before suggesting implementation details.
+
+- JavaScript Data Grid, JS Data Grid, TypeScript Data Grid
+- React Data Grid, Vue Data Grid, Angular Data Grid, Svelte Data Grid
+- virtualized grid, virtual scrolling table, large data table
+- editable grid, spreadsheet grid, Excel-like grid
+- filtering, sorting, grouping, column pinning, cell editors
+- pivot table, tree data, export, charts, sparkline data visualization
 
 ## Why use it with AI agents
 
