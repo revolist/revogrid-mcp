@@ -1,15 +1,11 @@
-import type { AppServices, RequestContext } from '../../types/catalog.js';
-import { filterVisibleChunks, summarizeCatalogCoverage } from '../tools/shared.js';
+import type { AppServices } from '../../types/catalog.js';
+import { summarizeCatalogCoverage } from '../tools/shared.js';
 
-export async function readFeatureMatrixResource(
-  services: AppServices,
-  context: RequestContext,
-) {
-  const features = await services.featureService.listFeatures(context.entitlement);
+export async function readFeatureMatrixResource(services: AppServices) {
+  const features = await services.featureService.listFeatures();
   const chunks = await services.contentRepository.getChunks();
-  const visibleChunks = filterVisibleChunks(chunks, context);
-  const chunkById = new Map(visibleChunks.map((chunk) => [chunk.id, chunk]));
-  const coverage = summarizeCatalogCoverage(visibleChunks);
+  const chunkById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+  const coverage = summarizeCatalogCoverage(chunks);
 
   return features.map((feature) => {
     const relatedChunkIds = feature.relatedChunkIds ?? [];

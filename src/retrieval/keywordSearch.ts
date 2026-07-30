@@ -1,5 +1,5 @@
 import type { DocumentChunk } from '@revogrid-mcp/content-model';
-import { canAccessChunk, normalizeVersion } from '@revogrid-mcp/content-model';
+import { normalizeVersion } from '@revogrid-mcp/content-model';
 
 import type { SearchMatch, SearchQueryFilters } from '../types/catalog.js';
 import { compareSearchMatches } from './rerank.js';
@@ -18,10 +18,6 @@ export function filterChunks(
   const targetVersion = normalizeVersion(filters.version);
 
   return chunks.filter((chunk) => {
-    if (!canAccessChunk(chunk, filters.entitlement)) {
-      return false;
-    }
-
     if (filters.framework && chunk.framework && chunk.framework !== filters.framework) {
       return false;
     }

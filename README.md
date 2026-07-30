@@ -4,7 +4,7 @@ Hosted Streamable HTTP MCP server for version-aware [RevoGrid](https://rv-grid.c
 
 - current [RevoGrid docs](https://github.com/revolist/revogrid) and [examples](https://demo.rv-grid.com)
 - version-aware migration guidance
-- feature availability and Pro gating
+- feature availability with Core, Pro, and Enterprise package labeling
 - type-informed API symbols from RevoGrid TypeScript sources
 
 ## Why teams use RevoGrid
@@ -61,8 +61,8 @@ Hosted endpoint: `https://mcp.rv-grid.com`
 
 ## What it exposes
 
-- Streamable HTTP MCP at `/` (community content)
-- Streamable HTTP MCP at `/pro` (community + Pro content, auth behavior documented internally)
+- Streamable HTTP MCP at `/` (unified Core, Pro, and Enterprise knowledge; no access token)
+- Token-free `/pro` compatibility alias for existing clients
 - Health endpoint at `/health`
 - Tools:
   - `search_revogrid_docs`
@@ -86,29 +86,23 @@ The server provides indexed chunks for:
 - migration/changelog notes
 - API/type definitions (feature and symbol-oriented chunks)
 - feature matrix and version mapping
-- Pro-capable capabilities (subject to route/auth controls)
+- Pro and Enterprise capabilities, labeled with `requiresPro` where applicable
 
 ## Install in AI clients
 
 - Claude Code: `claude mcp add --transport http revogrid https://mcp.rv-grid.com`
 - Codex: `codex mcp add revogrid --url https://mcp.rv-grid.com`
 - Cursor: add `https://mcp.rv-grid.com` under `mcpServers` in `.cursor/mcp.json`
-- VS Code:
-  - Public package: `RevoGrid DataGrid MCP`, endpoint `https://mcp.rv-grid.com`
-  - Pro package: `RevoGrid DataGrid MCP Pro`, endpoint `https://mcp.rv-grid.com/pro`
-
-The public VS Code package does not prompt for a bearer token. Install the Pro package only for Pro-gated retrieval; that package asks for a bearer token before connecting to `/pro`.
+- VS Code: install `RevoGrid DataGrid MCP`; it connects to `https://mcp.rv-grid.com`
 
 ## Maintainer packaging
 
 ```bash
 pnpm vscode:package
-pnpm vscode:package:pro
 ```
 
 ```bash
 pnpm vscode:publish
-pnpm vscode:publish:pro
 ```
 
 ## Manual MCP tests

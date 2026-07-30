@@ -46,8 +46,6 @@ const AppEnvSchema = z.object({
   ENABLE_RATE_LIMITING: booleanFromEnv.default(false),
   RATE_LIMIT_MAX: integerFromEnv.default(60),
   RATE_LIMIT_WINDOW_MS: integerFromEnv.default(60_000),
-  ENABLE_PRO_ROUTE_AUTH: booleanFromEnv.default(false),
-  AUTH_JWT_SECRET: z.string().optional(),
   WEBHOOK_TOKEN: z.string({
     required_error: 'WEBHOOK_TOKEN is required.',
     invalid_type_error: 'WEBHOOK_TOKEN is required.'

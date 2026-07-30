@@ -5,22 +5,14 @@ Do not publish this document to anonymous users.
 
 This file contains operational security and environment layout details and is intended for internal use.
 
-## Pro route auth
+## Unified MCP routes
 
 The server exposes:
-- `/` with community content
-- `/pro` with combined community + Pro content
+- `/` with combined Core, Pro, and Enterprise knowledge
+- `/pro` as a token-free compatibility alias with the same catalog
 
-Pro route config:
-
-```bash
-ENABLE_PRO_ROUTE_AUTH=true
-AUTH_JWT_SECRET=your-shared-jwt-secret
-```
-
-If `ENABLE_PRO_ROUTE_AUTH=false`, `/pro` is open and serves combined docs. If `true`, `/pro` requires `Authorization: Bearer <jwt>`.
-
-For client configuration, use `http://localhost:8787/pro` and send the `Authorization` header.
+Clients should use `http://localhost:8787/`. `requiresPro` remains descriptive
+metadata for package and license guidance; it is not an MCP access-control flag.
 
 ## Re-index webhook and webhook tokens
 
@@ -44,11 +36,8 @@ For private GitHub sources:
 - `SOURCE_UPDATE_GITHUB_TOKEN` (preferred)
 - fallback `GITHUB_TOKEN`
 
-`WEBHOOK_TOKEN` is required. Generate a strong random value, or derive a stable value from `AUTH_JWT_SECRET`:
-
-```bash
-pnpm derive:token
-```
+`WEBHOOK_TOKEN` is required. Generate and store a strong random value independently
+from client-facing MCP configuration.
 
 ## Source resolution and layout
 
@@ -102,8 +91,6 @@ pnpm sources:update -- --remote
 - `ENABLE_RATE_LIMITING` (`true|false`)
 - `RATE_LIMIT_MAX` (default `60`)
 - `RATE_LIMIT_WINDOW_MS` (default `60000`)
-- `ENABLE_PRO_ROUTE_AUTH` (`true|false`)
-- `AUTH_JWT_SECRET`
 - `WEBHOOK_TOKEN`
 - `SOURCE_UPDATE_GITHUB_TOKEN` (optional)
 
@@ -141,6 +128,9 @@ docker compose up -d app
 docker compose --profile jobs run --rm reindex
 ```
 
-## Pro/private source onboarding
+## Pro and private source onboarding
 
-When adding new private sources, use a dedicated adapter under `packages/ingestion/src/sources/`, mark private chunks with `requiresPro: true`, and keep private-business logic outside transport.
+Pro sources are part of the unified catalog and should retain `requiresPro: true`
+metadata. Truly private or internal sources still require a dedicated, opt-in adapter
+under `packages/ingestion/src/sources/`; do not treat `requiresPro` as a secrecy or
+authorization boundary.

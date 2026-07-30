@@ -51,6 +51,15 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridRoot,
+        'docs/pro/new_ai.md',
+        [
+          '# Legacy Pro MCP Access',
+          '',
+          'Contact support to provision Pro MCP access for your account.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridRoot,
         'readme/README.md',
         [
           '# Readme Index',
@@ -81,7 +90,7 @@ describe.sequential('buildCatalogDataset', () => {
         'src/test/internal-behavior.ts',
         [
           'export function internalBehavior() {',
-          '  return \"internal\";',
+          '  return "internal";',
           '}'
         ].join('\n'),
       ),
@@ -128,7 +137,7 @@ describe.sequential('buildCatalogDataset', () => {
         [
           '# Public Pro Mention',
           '',
-          'This public comparison mentions the Pro version, commercial licensing, and @revolist/revogrid-pro as adjacent context.'
+          'This public comparison mentions Pivot, plugins, the Pro version, commercial licensing, and @revolist/revogrid-pro as adjacent context.'
         ].join('\n'),
       ),
       writeFixtureFile(
@@ -313,6 +322,12 @@ describe.sequential('buildCatalogDataset', () => {
     expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/dist/bundles/skip-this.md')).toBe(false);
   });
 
+  it('excludes the superseded entitlement-gated MCP guide', async () => {
+    const dataset = await buildCatalogDataset();
+
+    expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/docs/pro/new_ai.md')).toBe(false);
+  });
+
   it('classifies internal source files as internal surface while leaving docs as user-facing', async () => {
     const dataset = await buildCatalogDataset();
     const internalChunk = dataset.chunks.find(
@@ -422,7 +437,7 @@ describe.sequential('buildCatalogDataset', () => {
     );
   });
 
-  it('maps current pro app and example layout to pro urls and gated chunks', async () => {
+  it('maps current pro app and example layout to pro urls and labeled chunks', async () => {
     const dataset = await buildCatalogDataset();
     const pivotApi = dataset.chunks.find(
       (chunk) => chunk.sourcePath === 'revogrid-pro/apps/portal/src/content/docs/api/pivot.md',

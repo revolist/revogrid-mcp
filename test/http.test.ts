@@ -2,7 +2,6 @@ import { Socket } from 'node:net';
 import { Duplex } from 'node:stream';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import jsonwebtoken from 'jsonwebtoken';
 
 import { loadConfig } from '../src/config/env.js';
 import { createApp } from '../src/http/createApp.js';
@@ -139,7 +138,7 @@ describe('http integration', () => {
     });
   });
 
-  it('keeps common MCP resources free of pro surfaces', async () => {
+  it('serves catalog resources from the unified endpoint', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/',
@@ -152,17 +151,17 @@ describe('http integration', () => {
         id: 2,
         method: 'resources/read',
         params: {
-          uri: 'revogrid://versions/all'
+          uri: 'revogrid://catalog/coverage'
         }
       }
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).not.toContain('"pro"');
-    expect(response.body).not.toContain('"pivot"');
+    expect(response.body).toContain('requiresProChunkCount');
+    expect(response.body).toContain('revogrid-pro');
   });
 
-  it('keeps common MCP search results free of pro docs', async () => {
+  it('returns labeled Pro docs from the canonical root endpoint without a token', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/',
@@ -184,96 +183,22 @@ describe('http integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).not.toContain('"requiresPro":true');
-    expect(response.body).not.toContain('pro.rv-grid.com');
-  });
-
-  it('exposes combined community and pro docs over /pro when auth is disabled', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/pro',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream'
-      },
-      payload: {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: {
-          name: 'search_revogrid_docs',
-          arguments: {
-            query: 'pivot feature'
-          }
-        }
-      }
-    });
-
-    expect(response.statusCode).toBe(200);
     expect(response.body).toContain('"requiresPro":true');
     expect(response.body).toContain('pro.rv-grid.com');
   });
-});
 
-describe('/pro auth integration', () => {
-  const secret = 'test-jwt-secret';
-  const config = loadConfig({
-    NODE_ENV: 'test',
-    LOG_LEVEL: 'error',
-    CONTENT_BACKEND: 'memory',
-    ENABLE_RATE_LIMITING: 'false',
-    ENABLE_ORIGIN_VALIDATION: 'false',
-    ENABLE_PRO_ROUTE_AUTH: 'true',
-    AUTH_JWT_SECRET: secret,
-    WEBHOOK_TOKEN: 'test-webhook-token'
-  });
-
-  let app: ReturnType<typeof createApp>;
-
-  beforeAll(async () => {
-    const services = await createServices(config);
-    app = createApp(config, services);
-    await app.ready();
-  }, 30000);
-
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('rejects /pro requests without a valid bearer token when auth is enabled', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/pro',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream'
-      },
-      payload: initializePayload
-    });
-
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toEqual({
-      error: 'A valid bearer token is required for /pro.'
-    });
-  });
-
-  it('accepts /pro requests with a valid bearer token when auth is enabled', async () => {
-    const token = jsonwebtoken.sign({ sub: 'user-123' }, secret, {
-      algorithm: 'HS256',
-      expiresIn: '1m'
-    });
-
+  it('keeps /pro as a token-free compatibility alias', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/pro',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${token}`
+        authorization: 'Bearer stale-client-token'
       },
       payload: {
         jsonrpc: '2.0',
-        id: 4,
+        id: 3,
         method: 'tools/call',
         params: {
           name: 'search_revogrid_docs',

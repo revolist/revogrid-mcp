@@ -36,23 +36,22 @@ describe('MCP tool handlers', () => {
         framework: 'react'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.results[0]?.id).toBe('guide-react-getting-started');
   });
 
-  it('keeps anonymous search results free of pro chunks even when requiresPro is requested', async () => {
+  it('returns Pro search results when requiresPro is requested', async () => {
     const result = await handleSearchRevogridDocs(
       {
         query: 'pivot feature',
         requiresPro: true
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
-    expect(result.results).toEqual([]);
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results.every((item) => item.requiresPro)).toBe(true);
   });
 
   it('returns a migration suggestion for upgrade-like searches', async () => {
@@ -61,7 +60,6 @@ describe('MCP tool handlers', () => {
         query: 'upgrade from v4 to v5'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.suggestedNextTool).toBe('get_migration_notes');
@@ -73,35 +71,44 @@ describe('MCP tool handlers', () => {
         query: 'custom column type'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.results[0]?.id).toBe('example-custom-column-type');
   });
 
-  it('keeps anonymous example results free of pro demos', async () => {
+  it('returns Pro examples through the unified handler', async () => {
     const result = await handleFindExamples(
       {
         query: 'pivot feature',
         surface: 'pivot'
       },
       services,
-      { entitlement: 'anonymous' },
-    );
-
-    expect(result.results).toEqual([]);
-  });
-
-  it('returns pro examples for paid users', async () => {
-    const result = await handleFindExamples(
-      {
-        query: 'pivot feature'
-      },
-      services,
-      { entitlement: 'paid_pro' },
     );
 
     expect(result.results[0]?.id).toBe('example-pivot-demo');
+    expect(result.results[0]?.requiresPro).toBe(true);
+  });
+
+  it('filters examples by Core or Pro package requirement', async () => {
+    const coreOnly = await handleFindExamples(
+      {
+        query: 'custom column type',
+        requiresPro: false
+      },
+      services,
+    );
+    const proOnly = await handleFindExamples(
+      {
+        query: 'pivot feature',
+        requiresPro: true
+      },
+      services,
+    );
+
+    expect(coreOnly.results.length).toBeGreaterThan(0);
+    expect(coreOnly.results.every((item) => item.requiresPro === false)).toBe(true);
+    expect(proOnly.results.length).toBeGreaterThan(0);
+    expect(proOnly.results.every((item) => item.requiresPro)).toBe(true);
   });
 
   it('does not return pro plugin source files from find_examples', async () => {
@@ -147,7 +154,6 @@ describe('MCP tool handlers', () => {
         surface: 'pivot'
       },
       services,
-      { entitlement: 'paid_pro' },
     );
 
     expect(result.results.map((item) => item.id)).toContain('revogrid-pro-examples-components-pivot');
@@ -162,28 +168,26 @@ describe('MCP tool handlers', () => {
         featureName: 'beforeedit'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.supported).toBe(true);
     expect(result.requiresPro).toBe(false);
   });
 
-  it('does not leak pro docs to anonymous pivot lookups', async () => {
+  it('returns labeled Pro docs for pivot feature lookups', async () => {
     const result = await handleResolveFeatureMatrix(
       {
         featureName: 'pivot feature'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.requiresPro).toBe(true);
-    expect(result.bestDocs).toEqual([]);
-    expect(result.bestExamples).toEqual([]);
+    expect(result.bestDocs[0]?.id).toBe('guide-pivot-overview');
+    expect(result.bestExamples[0]?.id).toBe('example-pivot-demo');
   });
 
-  it('keeps explicit internal feature artifacts hidden from anonymous detail views', async () => {
+  it('returns indexed internal feature artifacts without an entitlement context', async () => {
     const services = createTestServices({
       chunks: [
         {
@@ -222,24 +226,23 @@ describe('MCP tool handlers', () => {
         featureName: 'internal audit'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.supported).toBe(true);
     expect(result.requiresPro).toBe(true);
-    expect(result.bestDocs).toEqual([]);
+    expect(result.bestDocs[0]?.id).toBe('revogrid-src-internal-audit');
     expect(result.bestExamples).toEqual([]);
   });
 
-  it('returns catalog coverage summary for anonymous users', async () => {
-    const coverage = await readCatalogCoverageResource(services, { entitlement: 'anonymous' });
+  it('returns unified catalog coverage', async () => {
+    const coverage = await readCatalogCoverageResource(services);
 
     expect(coverage.chunkCount).toBeGreaterThan(0);
     expect(coverage.bySurface).toHaveProperty('core');
     expect(coverage.byRepository).toHaveProperty('revogrid');
   });
 
-  it('keeps anonymous feature matrix resources free of pro-only feature metadata', async () => {
+  it('includes Core and Pro metadata in the unified feature matrix', async () => {
     const services = createTestServices({
       chunks: [
         {
@@ -299,16 +302,16 @@ describe('MCP tool handlers', () => {
       migrations: []
     });
 
-    const matrix = await readFeatureMatrixResource(services, { entitlement: 'anonymous' });
-    const coverage = await readCatalogCoverageResource(services, { entitlement: 'anonymous' });
+    const matrix = await readFeatureMatrixResource(services);
+    const coverage = await readCatalogCoverageResource(services);
 
-    expect(matrix.map((feature) => feature.featureName)).toEqual(['public feature']);
-    expect(matrix[0]?.catalogCoverage.byRepository).not.toHaveProperty('revogrid-pro');
-    expect(coverage.byRepository).not.toHaveProperty('revogrid-pro');
-    expect(coverage.requiresProChunkCount).toBe(0);
+    expect(matrix.map((feature) => feature.featureName)).toEqual(['public feature', 'pro feature']);
+    expect(matrix[0]?.catalogCoverage.byRepository).toHaveProperty('revogrid-pro');
+    expect(coverage.byRepository).toHaveProperty('revogrid-pro');
+    expect(coverage.requiresProChunkCount).toBe(1);
   });
 
-  it('keeps anonymous internal-surface searches off requires-pro implementation chunks', async () => {
+  it('returns all indexed internal-surface chunks', async () => {
     const services = createTestServices({
       chunks: [
         {
@@ -353,11 +356,11 @@ describe('MCP tool handlers', () => {
         surface: 'internal'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]?.id).toBe('revogrid-internal-helper');
+    expect(result.results.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['revogrid-internal-debug', 'revogrid-internal-helper']),
+    );
   });
 
   it('returns a structured unsupported response for unknown features', async () => {
@@ -366,7 +369,6 @@ describe('MCP tool handlers', () => {
         featureName: 'unknown feature'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.supported).toBe(false);
@@ -381,7 +383,6 @@ describe('MCP tool handlers', () => {
         toVersion: '5.2.0'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.renamedSymbols[0]).toEqual({
@@ -446,21 +447,18 @@ describe('MCP tool handlers', () => {
         featureName: 'sorting'
       },
       services,
-      { entitlement: 'anonymous' },
     );
     const columnGrouping = await handleResolveFeatureMatrix(
       {
         featureName: 'ColumnGrouping'
       },
       services,
-      { entitlement: 'anonymous' },
     );
     const treeData = await handleResolveFeatureMatrix(
       {
         featureName: 'TreeDataPlugin'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(sorting.supported).toBe(true);
@@ -471,7 +469,7 @@ describe('MCP tool handlers', () => {
     expect(columnGrouping.bestDocs[0]?.id).toBe('api-column-grouping');
     expect(treeData.supported).toBe(true);
     expect(treeData.requiresPro).toBe(true);
-    expect(treeData.bestDocs).toEqual([]);
+    expect(treeData.bestDocs[0]?.id).toBe('plugin-tree-data');
   });
 
   it('returns closest migration notes for matching release lines when no exact pair exists', async () => {
@@ -520,7 +518,6 @@ describe('MCP tool handlers', () => {
         toVersion: '4.0.0'
       },
       services,
-      { entitlement: 'anonymous' },
     );
     const intraMajorUpgrade = await handleGetMigrationNotes(
       {
@@ -528,7 +525,6 @@ describe('MCP tool handlers', () => {
         toVersion: '4.1.0'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(directUpgrade.renamedSymbols).toContainEqual({
@@ -590,7 +586,6 @@ describe('MCP tool handlers', () => {
         toVersion: '4.0.0'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.renamedSymbols).toContainEqual({
@@ -607,7 +602,6 @@ describe('MCP tool handlers', () => {
         toVersion: '9.0.0'
       },
       services,
-      { entitlement: 'anonymous' },
     );
 
     expect(result.breakingChanges).toEqual([]);

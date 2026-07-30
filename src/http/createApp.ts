@@ -5,11 +5,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppError, createLogger } from '@revogrid-mcp/shared';
 
-import { resolveProRequestContext, resolveRequestContext } from '../auth/authenticator.js';
 import type { AppConfig } from '../config/env.js';
 import { createMcpServer } from '../mcp/createMcpServer.js';
-import { FilteredContentRepository } from '../repositories/filteredContentRepository.js';
-import { createServicesForRepository } from '../services/serviceFactory.js';
 import { registerSecurityHooks } from './middleware/security.js';
 import type { AppServices } from '../types/catalog.js';
 import { runReindex } from '../services/reindexService.js';
@@ -20,9 +17,6 @@ type ReindexHookPayload = {
 
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = createLogger(config.LOG_LEVEL);
-  const publicServices = createServicesForRepository(
-    new FilteredContentRepository(services.contentRepository, (chunk) => !chunk.requiresPro),
-  );
   const requestStats = {
     startedAt: new Date().toISOString(),
     healthRequests: 0,
@@ -66,8 +60,6 @@ export function createApp(config: AppConfig, services: AppServices) {
   const mcpHandler = async (
     request: FastifyRequest,
     reply: FastifyReply,
-    routeServices: AppServices,
-    contextResolver: typeof resolveRequestContext,
   ) => {
     requestStats.mcpRequestsTotal += 1;
     if (request.routeOptions.url === '/') {
@@ -77,8 +69,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       requestStats.mcpRequestsByPath.pro += 1;
     }
 
-    const context = contextResolver(request, config);
-    const server = createMcpServer(routeServices, context);
+    const server = createMcpServer(services);
     const transport = new StreamableHTTPServerTransport({
       enableJsonResponse: true
     });
@@ -97,13 +88,13 @@ export function createApp(config: AppConfig, services: AppServices) {
   app.route({
     method: ['GET', 'POST', 'DELETE'],
     url: '/',
-    handler: (request, reply) => mcpHandler(request, reply, publicServices, resolveRequestContext)
+    handler: mcpHandler
   });
 
   app.route({
     method: ['GET', 'POST', 'DELETE'],
     url: '/pro',
-    handler: (request, reply) => mcpHandler(request, reply, services, resolveProRequestContext)
+    handler: mcpHandler
   });
   
   app.post('/hooks/reindex', async (request, reply) => {
@@ -120,8 +111,7 @@ export function createApp(config: AppConfig, services: AppServices) {
         updateSources: payload.updateSources === true
       });
       
-      // Update both public and private repositories if applicable
-      // In this setup, services.contentRepository is the root content repository
+      // Replace the unified catalog used by both MCP route aliases.
       services.contentRepository.updateDataset(dataset);
       
       return {

@@ -30,6 +30,7 @@ export const ExampleResultItemSchema = z.object({
   framework: FrameworkSchema.optional(),
   version: z.string().optional(),
   surface: SurfaceSchema,
+  requiresPro: z.boolean(),
   summary: z.string(),
   packages: z.array(z.string()),
   sourceUrl: z.string().optional(),
@@ -73,6 +74,7 @@ export const FindExamplesInputSchema = z.object({
   framework: FrameworkSchema.optional(),
   version: z.string().optional(),
   surface: SurfaceSchema.optional(),
+  requiresPro: z.boolean().optional(),
   limit: z.number().int().min(1).max(20).default(5)
 });
 

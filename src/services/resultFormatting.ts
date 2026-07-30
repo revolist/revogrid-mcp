@@ -31,6 +31,7 @@ export function formatExampleResult(match: SearchMatch): ExampleResultItem {
     framework: match.chunk.framework,
     version: match.chunk.version,
     surface: match.chunk.surface,
+    requiresPro: match.chunk.requiresPro,
     summary: match.chunk.summary ?? match.chunk.body.slice(0, 160),
     packages: match.chunk.packageNames ?? [],
     sourceUrl: match.chunk.sourcePath ? `repo://${match.chunk.sourcePath}` : undefined,

@@ -1,21 +1,4 @@
-import { canAccessChunk } from '@revogrid-mcp/content-model';
-
 import type { DocumentChunk } from '@revogrid-mcp/content-model';
-import type { RequestContext, SearchMatch } from '../../types/catalog.js';
-
-export function filterVisibleMatches(
-  matches: SearchMatch[],
-  context: RequestContext,
-): SearchMatch[] {
-  return matches.filter((match) => canAccessChunk(match.chunk, context.entitlement));
-}
-
-export function filterVisibleChunks(
-  chunks: DocumentChunk[],
-  context: RequestContext,
-): DocumentChunk[] {
-  return chunks.filter((chunk) => canAccessChunk(chunk, context.entitlement));
-}
 
 export type CatalogCoverageReport = {
   chunkCount: number;
@@ -27,17 +10,15 @@ export type CatalogCoverageReport = {
 };
 
 export function summarizeCatalogCoverage(chunks: DocumentChunk[]): CatalogCoverageReport {
-  const visibleChunks = chunks;
-
   return {
-    chunkCount: visibleChunks.length,
-    byRepository: countChunksBy(visibleChunks, (chunk) => {
+    chunkCount: chunks.length,
+    byRepository: countChunksBy(chunks, (chunk) => {
       const sourcePath = chunk.sourcePath ?? '';
       return sourcePath.split('/')[0] ?? 'unknown';
     }),
-    bySurface: countChunksBy(visibleChunks, (chunk) => chunk.surface),
-    byDocType: countChunksBy(visibleChunks, (chunk) => chunk.docType),
-    byPathPrefix: countChunksBy(visibleChunks, (chunk) => {
+    bySurface: countChunksBy(chunks, (chunk) => chunk.surface),
+    byDocType: countChunksBy(chunks, (chunk) => chunk.docType),
+    byPathPrefix: countChunksBy(chunks, (chunk) => {
       const sourcePath = chunk.sourcePath ?? '';
       const segments = sourcePath.split('/');
       if (segments.length <= 2) {
@@ -46,7 +27,7 @@ export function summarizeCatalogCoverage(chunks: DocumentChunk[]): CatalogCovera
 
       return `${segments[0]}/${segments[1]}`;
     }),
-    requiresProChunkCount: visibleChunks.filter((chunk) => chunk.requiresPro).length
+    requiresProChunkCount: chunks.filter((chunk) => chunk.requiresPro).length
   };
 }
 

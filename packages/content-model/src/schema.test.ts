@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DocumentChunkSchema, SeedDatasetSchema } from './schema.js';
+import { DocumentChunkSchema, RetrievalFiltersSchema, SeedDatasetSchema } from './schema.js';
 
 describe('content model schemas', () => {
   it('accepts a valid chunk', () => {
@@ -32,6 +32,17 @@ describe('content model schemas', () => {
       versions: [],
       features: [],
       migrations: []
+    });
+  });
+
+  it('models Pro as searchable metadata without an entitlement filter', () => {
+    const result = RetrievalFiltersSchema.parse({
+      requiresPro: true
+    });
+
+    expect(result).toEqual({
+      requiresPro: true,
+      limit: 5
     });
   });
 });

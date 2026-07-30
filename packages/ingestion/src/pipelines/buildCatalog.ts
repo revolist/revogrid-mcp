@@ -258,7 +258,7 @@ function parseFeatureMatrixRows(content: string): FeatureMatrixRow[] {
     return [];
   }
 
-  const statusColumns = headerColumns.map((column, columnIndex) => ({
+  const statusColumns = headerColumns.map((column) => ({
     isProSignal: /pro|enterprise/i.test(column),
     isNotesColumn: /notes|description|comment|details/i.test(column)
   }));
@@ -592,7 +592,7 @@ function deriveFeatures(chunks: DocumentChunk[]): FeatureRecord[] {
         relatedChunkIds: isDocChunk(chunk) ? [chunk.id] : [],
         relatedExampleIds: isExampleChunk(chunk) ? [chunk.id] : [],
         fallbackApproach: chunk.requiresPro
-          ? 'Search public RevoGrid core docs for adjacent patterns if Pro access is unavailable.'
+          ? 'Use adjacent RevoGrid Core patterns if the required Pro package or license is unavailable.'
           : undefined,
         aliases: unique([featureName, ...chunk.symbols.map((symbol) => normalizeText(symbol)).slice(0, 8)])
       });
@@ -818,17 +818,22 @@ function hasFrameworkSignal(value: string, normalizedPath: string, framework: st
 function detectSurface(source: SourceFile, title: string, content: string): DocumentChunk['surface'] {
   const value = `${source.relativePath} ${title} ${content}`.toLowerCase();
   const normalizedPath = source.relativePath.replace(/\\/g, '/').toLowerCase();
+  const documentIdentity = `${normalizedPath} ${title.toLowerCase()}`;
 
   if (source.category === 'changelog') {
     return value.includes('migration') || source.relativePath.includes('/migrations/') ? 'migration' : 'changelog';
   }
-  if (value.includes('columntype')) {
+  if (documentIdentity.includes('columntype')) {
     return 'columntype';
   }
-  if (value.includes('pivot')) {
+  if (documentIdentity.includes('pivot')) {
     return 'pivot';
   }
-  if (value.includes('plugin') || normalizedPath.includes('release/plugins') || normalizedPath.includes('/plugins/')) {
+  if (
+    documentIdentity.includes('plugin') ||
+    normalizedPath.includes('release/plugins') ||
+    normalizedPath.includes('/plugins/')
+  ) {
     return 'plugin';
   }
   if (

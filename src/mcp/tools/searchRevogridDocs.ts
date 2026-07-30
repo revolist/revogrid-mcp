@@ -3,14 +3,12 @@ import {
   SearchRevogridDocsOutputSchema
 } from '@revogrid-mcp/content-model';
 
-import type { AppServices, RequestContext } from '../../types/catalog.js';
+import type { AppServices } from '../../types/catalog.js';
 import { formatSearchResult } from '../../services/resultFormatting.js';
-import { filterVisibleMatches } from './shared.js';
 
 export async function handleSearchRevogridDocs(
   rawInput: unknown,
   services: AppServices,
-  context: RequestContext,
 ) {
   const input = SearchRevogridDocsInputSchema.parse(rawInput);
   const results = await services.searchService.searchDocs(input.query, {
@@ -19,8 +17,7 @@ export async function handleSearchRevogridDocs(
     surface: input.surface,
     requiresPro: input.requiresPro,
     docTypes: input.docTypes,
-    limit: input.limit,
-    entitlement: context.entitlement
+    limit: input.limit
   });
 
   const output = SearchRevogridDocsOutputSchema.parse({
@@ -33,7 +30,7 @@ export async function handleSearchRevogridDocs(
       docTypes: input.docTypes,
       limit: input.limit
     },
-    results: filterVisibleMatches(results, context).map(formatSearchResult),
+    results: results.map(formatSearchResult),
     suggestedNextTool: inferSuggestedNextTool(input.query)
   });
 

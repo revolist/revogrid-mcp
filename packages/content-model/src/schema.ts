@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import {
   DocTypeSchema,
-  EntitlementSchema,
   FrameworkSchema,
   StabilitySchema,
   SurfaceSchema
@@ -33,7 +32,6 @@ export const RetrievalFiltersSchema = z.object({
   surface: SurfaceSchema.optional(),
   requiresPro: z.boolean().optional(),
   docTypes: z.array(DocTypeSchema).optional(),
-  entitlement: EntitlementSchema.default('anonymous'),
   limit: z.number().int().min(1).max(20).default(5)
 });
 

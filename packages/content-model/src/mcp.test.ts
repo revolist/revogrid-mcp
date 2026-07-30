@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ExampleResultItemSchema,
   FindExamplesInputSchema,
   ResolveFeatureMatrixOutputSchema,
   SearchRevogridDocsInputSchema
@@ -21,6 +22,20 @@ describe('mcp schemas', () => {
     });
 
     expect(parsed.limit).toBe(5);
+  });
+
+  it('requires example results to declare whether they need Pro', () => {
+    const parsed = ExampleResultItemSchema.parse({
+      id: 'pivot-example',
+      title: 'Pivot example',
+      surface: 'pivot',
+      requiresPro: true,
+      summary: 'Pivot setup.',
+      packages: ['@revolist/revogrid-enterprise'],
+      score: 10
+    });
+
+    expect(parsed.requiresPro).toBe(true);
   });
 
   it('keeps feature matrix outputs compact and array-based', () => {

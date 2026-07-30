@@ -269,10 +269,10 @@ const features: FeatureRecord[] = [
     requiresPro: true,
     stability: 'stable',
     supportedFrameworks: ['react', 'vue', 'angular', 'svelte', 'vanilla'],
-    notes: ['Pivot is a Pro capability and should be hidden from anonymous clients.'],
+    notes: ['Pivot is a Pro capability; MCP results remain available and are labeled accordingly.'],
     relatedChunkIds: ['guide-pivot-overview'],
     relatedExampleIds: ['example-pivot-demo'],
-    fallbackApproach: 'For anonymous users, use grouping plus aggregation as the closest public fallback.',
+    fallbackApproach: 'If the Pro package or license is unavailable, use grouping plus aggregation as the closest Core fallback.',
     aliases: ['pivot table', 'pivot feature']
   }
 ];

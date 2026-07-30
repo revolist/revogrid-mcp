@@ -9,6 +9,8 @@
 *.log
 *.tsbuildinfo
 AGENTS.md
+README.internal.md
+*_feature.md
 coverage/**
 data/**
 external/**

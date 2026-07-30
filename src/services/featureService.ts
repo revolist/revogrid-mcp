@@ -1,6 +1,5 @@
 import type {
   DocumentChunk,
-  Entitlement,
   Framework
 } from '@revogrid-mcp/content-model';
 import { normalizeText } from '@revogrid-mcp/shared';
@@ -13,13 +12,8 @@ import type { SearchMatch, SearchQueryFilters } from '../types/catalog.js';
 export class DefaultFeatureMatrixService implements FeatureMatrixService {
   public constructor(private readonly repository: ContentRepository) {}
 
-  public async listFeatures(entitlement: Entitlement) {
-    const features = await this.repository.getFeatures();
-    if (entitlement === 'paid_pro') {
-      return features;
-    }
-
-    return features.filter((feature) => !feature.requiresPro);
+  public async listFeatures() {
+    return this.repository.getFeatures();
   }
 
   public async resolveFeature(
@@ -27,7 +21,6 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
     options: {
       framework?: Framework | undefined;
       version?: string | undefined;
-      entitlement: Entitlement;
     },
   ): Promise<FeatureResolution> {
     const [features, chunks] = await Promise.all([
@@ -46,8 +39,7 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
     const filters = {
       framework: options.framework,
       version: options.version,
-      limit: 8,
-      entitlement: options.entitlement
+      limit: 8
     };
 
     if (feature) {
@@ -145,7 +137,7 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
         relatedChunkIds: relatedDocIds,
         relatedExampleIds,
         fallbackApproach: requiresPro
-          ? 'Search public RevoGrid core docs for adjacent patterns if Pro access is unavailable.'
+          ? 'Use adjacent RevoGrid Core patterns if the required Pro package or license is unavailable.'
           : undefined,
         aliases: [normalizedName]
       },

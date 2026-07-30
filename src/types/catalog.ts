@@ -1,15 +1,10 @@
 import type {
   DocumentChunk,
-  Entitlement,
   FeatureRecord,
   Framework,
   MigrationNoteRecord
 } from '@revogrid-mcp/content-model';
 import type { ContentRepository } from '../repositories/contentRepository.js';
-
-export type RequestContext = {
-  entitlement: Entitlement;
-};
 
 export type SearchMatch = {
   chunk: DocumentChunk;
@@ -31,7 +26,6 @@ export type SearchQueryFilters = {
   requiresPro?: boolean | undefined;
   docTypes?: DocumentChunk['docType'][] | undefined;
   limit: number;
-  entitlement: Entitlement;
 };
 
 export type RevogridSearchService = {
@@ -46,13 +40,12 @@ export type FeatureResolution = {
 };
 
 export type FeatureMatrixService = {
-  listFeatures: (entitlement: Entitlement) => Promise<FeatureRecord[]>;
+  listFeatures: () => Promise<FeatureRecord[]>;
   resolveFeature: (
     featureName: string,
     options: {
       framework?: Framework | undefined;
       version?: string | undefined;
-      entitlement: Entitlement;
     },
   ) => Promise<FeatureResolution>;
 };
@@ -69,7 +62,6 @@ export type MigrationService = {
     toVersion: string,
     options: {
       framework?: Framework | undefined;
-      entitlement: Entitlement;
     },
   ) => Promise<MigrationResolution>;
 };

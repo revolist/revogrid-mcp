@@ -4,8 +4,6 @@ export * from './parsers/html.js';
 export * from './parsers/markdown.js';
 export * from './parsers/typescript.js';
 export * from './pipelines/buildCatalog.js';
-export * from './pipelines/ingestPro.js';
-export * from './pipelines/ingestPublic.js';
 export * from './sources/_shared.js';
 export * from './sources/api.js';
 export * from './sources/changelog.js';

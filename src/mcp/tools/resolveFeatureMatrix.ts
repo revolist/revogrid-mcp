@@ -3,20 +3,17 @@ import {
   ResolveFeatureMatrixOutputSchema
 } from '@revogrid-mcp/content-model';
 
-import type { AppServices, RequestContext } from '../../types/catalog.js';
+import type { AppServices } from '../../types/catalog.js';
 import { formatExampleResult, formatSearchResult } from '../../services/resultFormatting.js';
-import { filterVisibleMatches } from './shared.js';
 
 export async function handleResolveFeatureMatrix(
   rawInput: unknown,
   services: AppServices,
-  context: RequestContext,
 ) {
   const input = ResolveFeatureMatrixInputSchema.parse(rawInput);
   const resolution = await services.featureService.resolveFeature(input.featureName, {
     framework: input.framework,
-    version: input.version,
-    entitlement: context.entitlement
+    version: input.version
   });
 
   if (!resolution.feature) {
@@ -39,8 +36,8 @@ export async function handleResolveFeatureMatrix(
     stability: resolution.feature.stability,
     supportedFrameworks: resolution.feature.supportedFrameworks,
     notes: resolution.feature.notes ?? [],
-    bestDocs: filterVisibleMatches(resolution.docs, context).map(formatSearchResult),
-    bestExamples: filterVisibleMatches(resolution.examples, context).map(formatExampleResult),
+    bestDocs: resolution.docs.map(formatSearchResult),
+    bestExamples: resolution.examples.map(formatExampleResult),
     fallbackApproach: resolution.feature.fallbackApproach
   });
 }

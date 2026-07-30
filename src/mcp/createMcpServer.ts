@@ -7,7 +7,7 @@ import {
   SearchRevogridDocsInputSchema
 } from '@revogrid-mcp/content-model';
 
-import type { AppServices, RequestContext } from '../types/catalog.js';
+import type { AppServices } from '../types/catalog.js';
 import { registerPrompts } from './prompts/index.js';
 import { readFeatureMatrixResource } from './resources/featureMatrix.js';
 import { readGettingStartedResource } from './resources/gettingStarted.js';
@@ -45,10 +45,7 @@ function asResourceResponse(uri: string, payload: unknown) {
   };
 }
 
-export function createMcpServer(
-  services: AppServices,
-  context: RequestContext,
-): McpServer {
+export function createMcpServer(services: AppServices): McpServer {
   const server = new Server({
     name: 'revogrid-mcp',
     version: '1.0.0'
@@ -61,7 +58,7 @@ export function createMcpServer(
       description: 'Search docs, API reference, examples, and migration notes for RevoGrid.',
       inputSchema: SearchRevogridDocsInputSchema.shape
     },
-    async (input) => asToolResponse(await handleSearchRevogridDocs(input, services, context)),
+    async (input) => asToolResponse(await handleSearchRevogridDocs(input, services)),
   );
 
   server.registerTool(
@@ -71,7 +68,7 @@ export function createMcpServer(
       description: 'Search runnable or live RevoGrid examples only.',
       inputSchema: FindExamplesInputSchema.shape
     },
-    async (input) => asToolResponse(await handleFindExamples(input, services, context)),
+    async (input) => asToolResponse(await handleFindExamples(input, services)),
   );
 
   server.registerTool(
@@ -81,7 +78,7 @@ export function createMcpServer(
       description: 'Resolve whether a RevoGrid feature exists, whether it is Pro, and where to learn it.',
       inputSchema: ResolveFeatureMatrixInputSchema.shape
     },
-    async (input) => asToolResponse(await handleResolveFeatureMatrix(input, services, context)),
+    async (input) => asToolResponse(await handleResolveFeatureMatrix(input, services)),
   );
 
   server.registerTool(
@@ -91,7 +88,7 @@ export function createMcpServer(
       description: 'Get upgrade notes between RevoGrid versions.',
       inputSchema: GetMigrationNotesInputSchema.shape
     },
-    async (input) => asToolResponse(await handleGetMigrationNotes(input, services, context)),
+    async (input) => asToolResponse(await handleGetMigrationNotes(input, services)),
   );
 
   server.registerResource(
@@ -102,7 +99,7 @@ export function createMcpServer(
       description: 'Returns the latest indexed RevoGrid version.',
       mimeType: 'application/json'
     },
-    async (uri) => asResourceResponse(uri.href, await readLatestVersionResource(services, context)),
+    async (uri) => asResourceResponse(uri.href, await readLatestVersionResource(services)),
   );
 
   server.registerResource(
@@ -113,7 +110,7 @@ export function createMcpServer(
       description: 'Returns all indexed versions in the catalog.',
       mimeType: 'application/json'
     },
-    async (uri) => asResourceResponse(uri.href, await readAllVersionsResource(services, context)),
+    async (uri) => asResourceResponse(uri.href, await readAllVersionsResource(services)),
   );
 
   server.registerResource(
@@ -124,7 +121,7 @@ export function createMcpServer(
       description: 'Summary of indexed chunk coverage by repository, surface, doc type, and path.',
       mimeType: 'application/json'
     },
-    async (uri) => asResourceResponse(uri.href, await readCatalogCoverageResource(services, context)),
+    async (uri) => asResourceResponse(uri.href, await readCatalogCoverageResource(services)),
   );
 
   server.registerResource(
@@ -135,7 +132,7 @@ export function createMcpServer(
       description: 'Structured feature availability catalog.',
       mimeType: 'application/json'
     },
-    async (uri) => asResourceResponse(uri.href, await readFeatureMatrixResource(services, context)),
+    async (uri) => asResourceResponse(uri.href, await readFeatureMatrixResource(services)),
   );
 
   server.registerResource(
@@ -147,7 +144,7 @@ export function createMcpServer(
       mimeType: 'application/json'
     },
     async (uri) =>
-      asResourceResponse(uri.href, await readGettingStartedResource('react', services, context)),
+      asResourceResponse(uri.href, await readGettingStartedResource('react', services)),
   );
 
   server.registerResource(
@@ -159,7 +156,7 @@ export function createMcpServer(
       mimeType: 'application/json'
     },
     async (uri) =>
-      asResourceResponse(uri.href, await readGettingStartedResource('vue', services, context)),
+      asResourceResponse(uri.href, await readGettingStartedResource('vue', services)),
   );
 
   server.registerResource(
@@ -171,7 +168,7 @@ export function createMcpServer(
       mimeType: 'application/json'
     },
     async (uri) =>
-      asResourceResponse(uri.href, await readGettingStartedResource('angular', services, context)),
+      asResourceResponse(uri.href, await readGettingStartedResource('angular', services)),
   );
 
   registerPrompts(server);

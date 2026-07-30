@@ -1,6 +1,3 @@
-import type { Entitlement } from './enums.js';
-import type { DocumentChunk } from './schema.js';
-
 export function normalizeVersion(version: string | undefined): string | undefined {
   if (!version) {
     return undefined;
@@ -15,12 +12,4 @@ export function sanitizeLimit(limit: number | undefined, fallback = 5): number {
   }
 
   return Math.min(Math.max(Math.trunc(limit), 1), 20);
-}
-
-export function canAccessChunk(chunk: DocumentChunk, entitlement: Entitlement): boolean {
-  if (!chunk.requiresPro) {
-    return true;
-  }
-
-  return entitlement === 'paid_pro';
 }

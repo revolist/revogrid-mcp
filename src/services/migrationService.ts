@@ -1,6 +1,5 @@
 import type {
   DocumentChunk,
-  Entitlement,
   Framework,
   MigrationNoteRecord
 } from '@revogrid-mcp/content-model';
@@ -22,7 +21,6 @@ export class DefaultMigrationService implements MigrationService {
     toVersion: string,
     options: {
       framework?: Framework | undefined;
-      entitlement: Entitlement;
     },
   ): Promise<MigrationResolution> {
     const [migrations, chunks] = await Promise.all([
@@ -54,8 +52,7 @@ export class DefaultMigrationService implements MigrationService {
 
     const filters = {
       framework: options.framework,
-      limit: 5,
-      entitlement: options.entitlement
+      limit: 5
     };
 
     return {
@@ -82,7 +79,6 @@ function buildMatchesFromIds(
   filters: {
     framework?: Framework | undefined;
     limit: number;
-    entitlement: Entitlement;
   },
   whyMatched: string,
 ): SearchMatch[] {

@@ -13,3 +13,4 @@ test/*.d.ts.map
 data/*.json
 !data/.gitkeep
 .mcpregistry*
+*_feature.md

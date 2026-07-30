@@ -31,7 +31,7 @@ describe('VS Code MCP extension', () => {
     vi.clearAllMocks();
   });
 
-  it('does not expose or request bearer auth in the public package', async () => {
+  it('registers the canonical token-free MCP endpoint', async () => {
     const { activate } = await import('../src/vscode/extension.ts');
     const secrets = {
       get: vi.fn(),
@@ -59,6 +59,7 @@ describe('VS Code MCP extension', () => {
     const definitions = provider.provideMcpServerDefinitions();
     expect(definitions).toHaveLength(1);
     expect(definitions[0].label).toBe('RevoGrid DataGrid MCP');
+    expect(definitions[0].uri.value).toBe('https://mcp.rv-grid.com');
 
     const proLabeledServer = {
       label: 'RevoGrid DataGrid MCP Pro',
@@ -74,7 +75,7 @@ describe('VS Code MCP extension', () => {
     expect(vscodeMock.window.showInputBox).not.toHaveBeenCalled();
   });
 
-  it('requests bearer auth only for the Pro package definition', async () => {
+  it('treats a legacy Pro-named package as the unified token-free extension', async () => {
     const { activate } = await import('../src/vscode/extension.ts');
     const secrets = {
       get: vi.fn(async () => 'stored-token'),
@@ -94,21 +95,22 @@ describe('VS Code MCP extension', () => {
     activate(context as never);
 
     expect(vscodeMock.lm.registerMcpServerDefinitionProvider).toHaveBeenCalledWith(
-      'revogrid.proMcpServers',
+      'revogrid.mcpServers',
       expect.any(Object),
     );
 
     const provider = vscodeMock.lm.registerMcpServerDefinitionProvider.mock.calls[0][1];
     const definitions = provider.provideMcpServerDefinitions();
     expect(definitions).toHaveLength(1);
-    expect(definitions[0].label).toBe('RevoGrid DataGrid MCP Pro');
+    expect(definitions[0].label).toBe('RevoGrid DataGrid MCP');
+    expect(definitions[0].uri.value).toBe('https://mcp.rv-grid.com');
 
     const resolved = await provider.resolveMcpServerDefinition(definitions[0], {
       isCancellationRequested: false,
     });
 
-    expect(secrets.get).toHaveBeenCalledWith('revogrid.mcp.proBearerToken');
+    expect(secrets.get).not.toHaveBeenCalled();
     expect(vscodeMock.window.showInputBox).not.toHaveBeenCalled();
-    expect(resolved.headers).toEqual({ Authorization: 'Bearer stored-token' });
+    expect(resolved.headers).toBeUndefined();
   });
 });

@@ -12,28 +12,18 @@ describe('retrieval filters', () => {
   const repository = new InMemoryContentRepository(buildSeedDataset());
   const service = new DefaultRevogridSearchService(repository);
 
-  it('keeps pro chunks out of anonymous search results', async () => {
+  it('returns pro chunks through the unified search service', async () => {
     const results = await service.searchDocs('pivot feature', {
-      limit: 5,
-      entitlement: 'anonymous'
-    });
-
-    expect(results.some((result) => result.chunk.requiresPro)).toBe(false);
-  });
-
-  it('returns pro chunks for paid accounts', async () => {
-    const results = await service.searchDocs('pivot feature', {
-      limit: 5,
-      entitlement: 'paid_pro'
+      limit: 5
     });
 
     expect(results.some((result) => result.chunk.id === 'guide-pivot-overview')).toBe(true);
   });
 
-  it('keeps pro chunks out of trial search results', async () => {
+  it('preserves requiresPro as an explicit product metadata filter', async () => {
     const results = await service.searchDocs('pivot feature', {
       limit: 5,
-      entitlement: 'trial'
+      requiresPro: false
     });
 
     expect(results.some((result) => result.chunk.requiresPro)).toBe(false);
@@ -42,8 +32,7 @@ describe('retrieval filters', () => {
   it('applies framework filters', async () => {
     const results = await service.searchDocs('editable grid', {
       framework: 'react',
-      limit: 5,
-      entitlement: 'anonymous'
+      limit: 5
     });
 
     expect(results[0]?.chunk.framework).toBe('react');
@@ -52,8 +41,7 @@ describe('retrieval filters', () => {
   it('returns deterministic ordering for the same seeded query', () => {
     const chunks = buildSeedDataset().chunks;
     const filters = {
-      limit: 5,
-      entitlement: 'anonymous' as const
+      limit: 5
     };
 
     const first = hybridSearch('beforeedit', chunks, filters).map((match) => match.chunk.id);
@@ -97,8 +85,7 @@ describe('retrieval filters', () => {
     ];
     const internalOnly = hybridSearch('source helper', chunks, {
       surface: 'internal',
-      limit: 10,
-      entitlement: 'anonymous'
+      limit: 10
     });
 
     expect(internalOnly).toHaveLength(1);
@@ -115,19 +102,18 @@ describe('retrieval quality', () => {
 
   it.each([
     ['custom editor react', 'revogrid-docs-guide-react-editor'],
-    ['beforeedit event', 'revogrid-src-types-events'],
+    ['beforeedit event', 'revogrid-pro-packages-pro-plugins-event-manager-edit-interception'],
     ['column grouping', 'revogrid-docs-guide-column-grouping'],
     ['row grouping', 'revogrid-docs-guide-row-grouping'],
     ['pivot dimensions', 'revogrid-pro-apps-portal-src-content-docs-guides-pivot-concepts-dimensions'],
-    ['tree data', 'revogrid-pro-apps-portal-src-content-docs-guides-data-manage-tree'],
+    ['tree data', 'revogrid-docs-guide-tree-data'],
     ['infinite scroll', 'revogrid-pro-apps-portal-src-content-docs-guides-infinity-scroll'],
-    ['export excel', 'revogrid-pro-apps-portal-src-content-docs-guides-excel-export-excel-import-export-libraries'],
-    ['filter plugin', 'revogrid-pro-apps-portal-src-content-docs-guides-data-filter-filter-header'],
-    ['angular setup', 'revogrid-docs-guide-installation']
+    ['export excel', 'revogrid-docs-guide-data-grid-export-excel'],
+    ['filter plugin', 'revogrid-docs-guide-demos-js-js-filtering'],
+    ['angular setup', 'revogrid-docs-guide-demos-angular-angular-sample-module']
   ])('puts the intended local catalog result first for "%s"', (query, expectedTopId) => {
     const results = hybridSearch(query, dataset.chunks, {
-      limit: 5,
-      entitlement: 'paid_pro'
+      limit: 5
     });
 
     expect(results[0]?.chunk.id).toBe(expectedTopId);
@@ -135,8 +121,7 @@ describe('retrieval quality', () => {
 
   it('deduplicates repeated chunk ids before returning results', () => {
     const results = hybridSearch('export excel', dataset.chunks, {
-      limit: 10,
-      entitlement: 'paid_pro'
+      limit: 10
     });
     const resultIds = results.map((result) => result.chunk.id);
 
@@ -144,16 +129,25 @@ describe('retrieval quality', () => {
     expect(results[0]?.chunk.docType).toBe('guide');
   });
 
+  it('indexes token-free MCP setup guidance', () => {
+    const guide = dataset.chunks.find(
+      (chunk) => chunk.id === 'revogrid-pro-apps-portal-src-content-docs-guides-ai-mcp',
+    );
+
+    expect(guide?.body).toContain('No MCP access token');
+    expect(guide?.body).not.toContain('Authorization: Bearer');
+    expect(guide?.body).not.toContain('valid bearer token');
+  });
+
   it.each(['pivot dimensions', 'tree data', 'infinite scroll', 'export excel'])(
-    'keeps anonymous pro-heavy query "%s" free of pro chunks',
+    'returns labeled Pro knowledge for pro-heavy query "%s"',
     (query) => {
       const results = hybridSearch(query, dataset.chunks, {
-        limit: 10,
-        entitlement: 'anonymous'
+        limit: 10
       });
 
-      expect(results.some((result) => result.chunk.requiresPro)).toBe(false);
-      expect(results.some((result) => result.chunk.url.includes('pro.rv-grid.com'))).toBe(false);
+      expect(results.some((result) => result.chunk.requiresPro)).toBe(true);
+      expect(results.some((result) => result.chunk.url.includes('pro.rv-grid.com'))).toBe(true);
     },
   );
 });

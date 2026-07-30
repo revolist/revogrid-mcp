@@ -13,7 +13,7 @@ export function registerPrompts(server: McpServer): void {
         version: z.string().optional().describe('Optional target version')
       }
     },
-    async (args) => {
+    (args) => {
       const featureName = args.featureName ?? '';
       const framework = args.framework ? ` and framework "${args.framework}"` : '';
       const version = args.version ? ` for version "${args.version}"` : '';
@@ -41,7 +41,7 @@ export function registerPrompts(server: McpServer): void {
         toVersion: z.string().describe('Target version, e.g. 5.2.0')
       }
     },
-    async (args) => {
+    (args) => {
       return {
         messages: [
           {
@@ -66,7 +66,7 @@ export function registerPrompts(server: McpServer): void {
         framework: z.string().optional().describe('Optional framework filter')
       }
     },
-    async (args) => {
+    (args) => {
       const objective = args.objective ?? '';
       const framework = args.framework ? ` (${args.framework})` : '';
       return {
