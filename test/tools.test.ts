@@ -472,6 +472,44 @@ describe('MCP tool handlers', () => {
     expect(treeData.bestDocs[0]?.id).toBe('plugin-tree-data');
   });
 
+  it('prefers the closest canonical feature when aliases collide', async () => {
+    const services = createTestServices({
+      chunks: [],
+      versions: [],
+      migrations: [],
+      features: [
+        {
+          featureName: 'best javascript scheduler comparison',
+          supported: true,
+          requiresPro: false,
+          supportedFrameworks: ['vanilla'],
+          relatedChunkIds: [],
+          relatedExampleIds: [],
+          aliases: ['scheduler']
+        },
+        {
+          featureName: 'event scheduler',
+          supported: true,
+          requiresPro: true,
+          supportedFrameworks: ['vanilla'],
+          relatedChunkIds: [],
+          relatedExampleIds: [],
+          aliases: ['event-scheduler', 'scheduler']
+        }
+      ]
+    });
+
+    const result = await handleResolveFeatureMatrix(
+      {
+        featureName: 'scheduler'
+      },
+      services,
+    );
+
+    expect(result.featureName).toBe('event scheduler');
+    expect(result.requiresPro).toBe(true);
+  });
+
   it('returns closest migration notes for matching release lines when no exact pair exists', async () => {
     const services = createTestServices({
       chunks: [

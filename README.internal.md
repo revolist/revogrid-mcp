@@ -20,6 +20,11 @@ Protected endpoint:
 - **Endpoint:** `POST /hooks/reindex`
 - **Auth:** `X-Webhook-Token: <your-token>`
 
+The endpoint returns `202 Accepted` as soon as background reindexing starts. Check
+the app logs for `reindex_hook_completed` or `reindex_hook_failed`. A request made
+while a reindex is already active returns `409 Conflict`; callers should not retry
+until the current job finishes.
+
 Examples:
 
 ```bash

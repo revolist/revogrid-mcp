@@ -17,6 +17,7 @@ type ReindexHookPayload = {
 
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = createLogger(config.LOG_LEVEL);
+  let activeReindex: Promise<void> | null = null;
   const requestStats = {
     startedAt: new Date().toISOString(),
     healthRequests: 0,
@@ -105,27 +106,38 @@ export function createApp(config: AppConfig, services: AppServices) {
       return;
     }
 
-    try {
-      const payload = isRecord(request.body) ? (request.body as ReindexHookPayload) : {};
-      const { dataset, summary, sourceUpdate } = await runReindex({
-        updateSources: payload.updateSources === true
+    if (activeReindex) {
+      return reply.status(409).send({
+        status: 'in_progress',
+        message: 'Re-indexing is already in progress'
       });
-      
-      // Replace the unified catalog used by both MCP route aliases.
-      services.contentRepository.updateDataset(dataset);
-      
-      return {
-        status: 'success',
-        message: 'Re-indexing completed successfully',
-        sourceUpdate,
-        summary
-      };
-    } catch (error) {
-      logger.error('reindex_hook_failed', { 
-        error: error instanceof Error ? error.message : String(error) 
-      });
-      void reply.status(500).send({ error: 'Re-indexing failed' });
     }
+
+    const payload = isRecord(request.body) ? (request.body as ReindexHookPayload) : {};
+    activeReindex = runReindex({
+      updateSources: payload.updateSources === true
+    })
+      .then(({ dataset, summary, sourceUpdate }) => {
+        // Replace the unified catalog used by both MCP route aliases.
+        services.contentRepository.updateDataset(dataset);
+        logger.info('reindex_hook_completed', {
+          sourceUpdate,
+          summary
+        });
+      })
+      .catch((error: unknown) => {
+        logger.error('reindex_hook_failed', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      })
+      .finally(() => {
+        activeReindex = null;
+      });
+
+    return reply.status(202).send({
+      status: 'accepted',
+      message: 'Re-indexing started'
+    });
   });
 
   app.setErrorHandler((error, _request, reply) => {

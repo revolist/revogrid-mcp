@@ -67,13 +67,15 @@ export async function buildCatalogDataset(): Promise<SeedDataset> {
   )
     .filter((document): document is SourceDocument => Boolean(document))
     .sort((left, right) => left.chunk.id.localeCompare(right.chunk.id));
-  const derivedFeatures = deriveFeatures(normalizedDocuments.map((document) => document.chunk));
+  const chunks = normalizedDocuments.map((document) => document.chunk);
+  const canonicalPluginFeatures = deriveCanonicalPluginFeatures(chunks);
+  const derivedFeatures = deriveFeatures(chunks);
   const explicitFeatures = extractFeatureArtifacts(normalizedDocuments);
 
   return SeedDatasetSchema.parse({
-    chunks: normalizedDocuments.map((document) => document.chunk),
-    versions: deriveVersions(normalizedDocuments.map((document) => document.chunk), packageVersions),
-    features: mergeFeatureRecords(derivedFeatures, explicitFeatures),
+    chunks,
+    versions: deriveVersions(chunks, packageVersions),
+    features: mergeFeatureRecords([...canonicalPluginFeatures, ...derivedFeatures], explicitFeatures),
     migrations: deriveMigrations(normalizedDocuments, packageVersions.revogrid)
   });
 }
@@ -620,6 +622,100 @@ function deriveFeatures(chunks: DocumentChunk[]): FeatureRecord[] {
       ...feature,
       aliases: unique(feature.aliases)
     }));
+}
+
+function deriveCanonicalPluginFeatures(chunks: DocumentChunk[]): FeatureRecord[] {
+  const plugins = new Map<string, 'pro' | 'enterprise'>();
+
+  for (const chunk of chunks) {
+    const match = chunk.sourcePath?.match(
+      /^revogrid-pro\/packages\/(pro|enterprise)\/plugins\/([^/]+)\//,
+    );
+    const tier = match?.[1];
+    const slug = match?.[2];
+    if ((tier !== 'pro' && tier !== 'enterprise') || !slug) {
+      continue;
+    }
+
+    if (!plugins.has(slug)) {
+      plugins.set(slug, tier);
+    }
+  }
+
+  return [...plugins.entries()]
+    .map(([slug, tier]) => {
+      const relatedChunks = chunks
+        .filter((chunk) => isChunkRelatedToPlugin(chunk, slug))
+        .sort(comparePluginReferencePriority);
+      const featureName = slug.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const frameworks = unique(
+        relatedChunks
+          .map((chunk) => chunk.framework)
+          .filter((framework): framework is NonNullable<DocumentChunk['framework']> => Boolean(framework)),
+      );
+      const aliases = [slug, featureName, `${featureName} plugin`];
+      if (slug === 'event-scheduler') {
+        aliases.push('scheduler');
+      }
+
+      return {
+        featureName,
+        supported: true,
+        requiresPro: true,
+        stability: resolvePluginStability(relatedChunks),
+        supportedFrameworks: frameworks.length > 0 ? frameworks : ['vanilla'],
+        notes: [`Indexed from the RevoGrid ${tier === 'enterprise' ? 'Enterprise' : 'Pro'} ${slug} plugin.`],
+        relatedChunkIds: relatedChunks.filter(isDocChunk).map((chunk) => chunk.id),
+        relatedExampleIds: relatedChunks.filter(isExampleChunk).map((chunk) => chunk.id),
+        fallbackApproach: 'Use adjacent RevoGrid Core patterns if the required Pro package or license is unavailable.',
+        aliases: unique(aliases)
+      } satisfies FeatureRecord;
+    })
+    .sort((left, right) => left.featureName.localeCompare(right.featureName));
+}
+
+function isChunkRelatedToPlugin(chunk: DocumentChunk, slug: string): boolean {
+  const sourcePath = chunk.sourcePath?.toLowerCase();
+  if (!sourcePath?.startsWith('revogrid-pro/')) {
+    return false;
+  }
+
+  return (
+    sourcePath.includes(`/plugins/${slug}/`) ||
+    sourcePath.includes(`/content/docs/guides/${slug}/`) ||
+    sourcePath.includes(`/components/${slug}/`) ||
+    sourcePath.includes(`/src/components/${slug}/`) ||
+    sourcePath.includes(`/content/demo/${slug}.`) ||
+    sourcePath.includes(`/content/docs/api/${slug}.`)
+  );
+}
+
+function comparePluginReferencePriority(left: DocumentChunk, right: DocumentChunk): number {
+  return pluginReferencePriority(left) - pluginReferencePriority(right) || left.id.localeCompare(right.id);
+}
+
+function pluginReferencePriority(chunk: DocumentChunk): number {
+  const sourcePath = chunk.sourcePath?.toLowerCase() ?? '';
+  if (chunk.docType === 'guide' && sourcePath.includes('/content/docs/guides/')) {
+    return 0;
+  }
+  if (chunk.docType === 'api' && sourcePath.includes('/content/docs/api/')) {
+    return 1;
+  }
+  if (isExampleChunk(chunk)) {
+    return 2;
+  }
+  return 3;
+}
+
+function resolvePluginStability(chunks: DocumentChunk[]): DocumentChunk['stability'] {
+  if (chunks.some((chunk) => chunk.stability === 'stable')) {
+    return 'stable';
+  }
+  if (chunks.some((chunk) => chunk.stability === 'experimental')) {
+    return 'experimental';
+  }
+  return 'deprecated';
 }
 
 function extractFeatureArtifacts(documents: SourceDocument[]): FeatureRecord[] {

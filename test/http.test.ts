@@ -1,11 +1,17 @@
 import { Socket } from 'node:net';
 import { Duplex } from 'node:stream';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../src/services/reindexService.js', () => ({
+  runReindex: vi.fn()
+}));
 
 import { loadConfig } from '../src/config/env.js';
 import { createApp } from '../src/http/createApp.js';
-import { createServices } from '../src/services/serviceFactory.js';
+import { InMemoryContentRepository } from '../src/repositories/inMemoryContentRepository.js';
+import { runReindex } from '../src/services/reindexService.js';
+import { createServices, createServicesForRepository } from '../src/services/serviceFactory.js';
 
 if (typeof Duplex.prototype.destroySoon !== 'function') {
   Duplex.prototype.destroySoon = Duplex.prototype.destroy;
@@ -187,6 +193,37 @@ describe('http integration', () => {
     expect(response.body).toContain('pro.rv-grid.com');
   });
 
+  it.each([
+    ['kanban', 'kanban'],
+    ['scheduler', 'event scheduler']
+  ])('resolves the Pro %s feature from the canonical root endpoint', async (query, featureName) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: `feature-${query}`,
+        method: 'tools/call',
+        params: {
+          name: 'resolve_feature_matrix',
+          arguments: {
+            featureName: query
+          }
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(`\"featureName\":\"${featureName}\"`);
+    expect(response.body).toContain('\"supported\":true');
+    expect(response.body).toContain('\"requiresPro\":true');
+    expect(response.body).toContain('pro.rv-grid.com');
+  });
+
   it('keeps /pro as a token-free compatibility alias', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -212,5 +249,153 @@ describe('http integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('"requiresPro":true');
     expect(response.body).toContain('pro.rv-grid.com');
+  });
+});
+
+describe('reindex webhook', () => {
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'error',
+    CONTENT_BACKEND: 'memory',
+    ENABLE_RATE_LIMITING: 'false',
+    ENABLE_ORIGIN_VALIDATION: 'false',
+    WEBHOOK_TOKEN: 'test-webhook-token'
+  });
+  const dataset = {
+    chunks: [],
+    versions: [],
+    features: [],
+    migrations: []
+  };
+  const result = {
+    dataset,
+    summary: {
+      writtenTo: '/tmp/catalog.json',
+      persistedToPostgres: false,
+      totalSourceFiles: 0,
+      sourceFilesByCategory: {
+        docs: 0,
+        examples: 0,
+        changelog: 0,
+        api: 0
+      },
+      sourceFilesByRepository: {},
+      sourceRoots: [],
+      chunkCount: 0,
+      chunksByDocType: {},
+      chunksBySurface: {},
+      chunksByFramework: {},
+      requiresProChunkCount: 0,
+      typedApiChunkCount: 0
+    }
+  };
+  const mockedRunReindex = vi.mocked(runReindex);
+
+  beforeEach(() => {
+    mockedRunReindex.mockReset();
+  });
+
+  it('accepts a reindex before background work completes', async () => {
+    let completeReindex!: (value: typeof result) => void;
+    const pendingReindex = new Promise<typeof result>((resolve) => {
+      completeReindex = resolve;
+    });
+    mockedRunReindex.mockReturnValue(pendingReindex);
+
+    const repository = new InMemoryContentRepository(dataset);
+    const updateDataset = vi.spyOn(repository, 'updateDataset');
+    const app = createApp(config, createServicesForRepository(repository));
+    await app.ready();
+
+    const responsePromise = app.inject({
+      method: 'POST',
+      url: '/hooks/reindex',
+      headers: {
+        'x-webhook-token': 'test-webhook-token'
+      },
+      payload: {
+        updateSources: true
+      }
+    });
+    const settledBeforeCompletion = await Promise.race([
+      responsePromise.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 500))
+    ]);
+
+    completeReindex(result);
+    const response = await responsePromise;
+    await vi.waitFor(() => expect(updateDataset).toHaveBeenCalledWith(dataset));
+
+    expect(settledBeforeCompletion).toBe(true);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      status: 'accepted',
+      message: 'Re-indexing started'
+    });
+    expect(mockedRunReindex).toHaveBeenCalledWith({ updateSources: true });
+
+    await app.close();
+  });
+
+  it('rejects an overlapping reindex without starting duplicate work', async () => {
+    let completeReindex!: (value: typeof result) => void;
+    const pendingReindex = new Promise<typeof result>((resolve) => {
+      completeReindex = resolve;
+    });
+    mockedRunReindex.mockReturnValue(pendingReindex);
+
+    const app = createApp(
+      config,
+      createServicesForRepository(new InMemoryContentRepository(dataset))
+    );
+    await app.ready();
+
+    const firstResponse = await app.inject({
+      method: 'POST',
+      url: '/hooks/reindex',
+      headers: {
+        'x-webhook-token': 'test-webhook-token'
+      }
+    });
+    const secondResponse = await app.inject({
+      method: 'POST',
+      url: '/hooks/reindex',
+      headers: {
+        'x-webhook-token': 'test-webhook-token'
+      }
+    });
+
+    completeReindex(result);
+
+    expect(firstResponse.statusCode).toBe(202);
+    expect(secondResponse.statusCode).toBe(409);
+    expect(secondResponse.json()).toEqual({
+      status: 'in_progress',
+      message: 'Re-indexing is already in progress'
+    });
+    expect(mockedRunReindex).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it('keeps the reindex trigger protected', async () => {
+    const app = createApp(
+      config,
+      createServicesForRepository(new InMemoryContentRepository(dataset))
+    );
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/hooks/reindex',
+      headers: {
+        'x-webhook-token': 'wrong-token'
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(mockedRunReindex).not.toHaveBeenCalled();
+
+    await app.close();
   });
 });

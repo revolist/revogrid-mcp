@@ -129,6 +129,30 @@ describe('retrieval quality', () => {
     expect(results[0]?.chunk.docType).toBe('guide');
   });
 
+  it('exposes every indexed Pro plugin as a canonical feature', () => {
+    const indexedPluginSlugs = new Set(
+      dataset.chunks
+        .map((chunk) => chunk.sourcePath?.match(
+          /^revogrid-pro\/packages\/(?:pro|enterprise)\/plugins\/([^/]+)\//,
+        )?.[1])
+        .filter((slug): slug is string => Boolean(slug))
+    );
+    const canonicalFeatureNames = new Set(
+      dataset.features.map((feature) => feature.featureName.toLowerCase())
+    );
+    const missingFeatures = [...indexedPluginSlugs]
+      .map((slug) => slug.replace(/[-_]+/g, ' '))
+      .filter((featureName) => !canonicalFeatureNames.has(featureName));
+    const scheduler = dataset.features.find(
+      (feature) => feature.featureName.toLowerCase() === 'event scheduler'
+    );
+
+    expect(indexedPluginSlugs).toContain('kanban');
+    expect(indexedPluginSlugs).toContain('event-scheduler');
+    expect(missingFeatures).toEqual([]);
+    expect(scheduler?.aliases).toContain('scheduler');
+  });
+
   it('indexes token-free MCP setup guidance', () => {
     const guide = dataset.chunks.find(
       (chunk) => chunk.id === 'revogrid-pro-apps-portal-src-content-docs-guides-ai-mcp',

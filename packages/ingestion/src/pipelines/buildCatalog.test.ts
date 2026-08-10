@@ -196,6 +196,34 @@ describe.sequential('buildCatalogDataset', () => {
       ),
       writeFixtureFile(
         revogridProRoot,
+        'apps/portal/src/content/docs/guides/kanban/index.mdx',
+        [
+          '---',
+          'title: Enterprise Kanban',
+          'description: Build virtualized Kanban boards with RevoGrid Enterprise.',
+          '---',
+          '',
+          '# Enterprise Kanban',
+          '',
+          'Configure `KanbanPlugin` with columns, cards, swimlanes, and WIP limits.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'apps/portal/src/content/docs/guides/event-scheduler/introduction/index.mdx',
+        [
+          '---',
+          'title: Event Scheduler',
+          'description: Build resource and calendar scheduling views.',
+          '---',
+          '',
+          '# Event Scheduler',
+          '',
+          'Configure `EventSchedulerPlugin` with resources, events, calendars, and timeline views.'
+        ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridProRoot,
         'apps/portal/src/content/demo/pivot.mdx',
         [
           '---',
@@ -265,6 +293,21 @@ describe.sequential('buildCatalogDataset', () => {
           '  applyPivot() {}',
           '}'
         ].join('\n'),
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'packages/enterprise/plugins/kanban/index.ts',
+        'export class KanbanPlugin {}',
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'packages/enterprise/plugins/event-scheduler/index.ts',
+        'export class EventSchedulerPlugin {}',
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'packages/pro/plugins/data-grid-cell-inspector/index.ts',
+        'export function inspectActiveCell() {}',
       )
     ]);
 
@@ -315,6 +358,40 @@ describe.sequential('buildCatalogDataset', () => {
       supported: false,
       requiresPro: true
     });
+  });
+
+  it('creates canonical feature records for every indexed Pro plugin', async () => {
+    const dataset = await buildCatalogDataset();
+    const featuresByName = new Map(
+      dataset.features.map((feature) => [feature.featureName.toLowerCase(), feature])
+    );
+
+    const kanban = featuresByName.get('kanban');
+    const scheduler = featuresByName.get('event scheduler');
+    const sourceOnlyPlugin = featuresByName.get('data grid cell inspector');
+
+    expect(kanban).toMatchObject({
+      supported: true,
+      requiresPro: true
+    });
+    expect(kanban?.relatedChunkIds).toContain(
+      'revogrid-pro-apps-portal-src-content-docs-guides-kanban-index'
+    );
+    expect(scheduler).toMatchObject({
+      supported: true,
+      requiresPro: true
+    });
+    expect(scheduler?.aliases).toContain('scheduler');
+    expect(scheduler?.relatedChunkIds).toContain(
+      'revogrid-pro-apps-portal-src-content-docs-guides-event-scheduler-introduction-index'
+    );
+    expect(sourceOnlyPlugin).toMatchObject({
+      supported: true,
+      requiresPro: true
+    });
+    expect(sourceOnlyPlugin?.relatedChunkIds).toContain(
+      'revogrid-pro-packages-pro-plugins-data-grid-cell-inspector-index'
+    );
   });
 
   it('keeps excluded build outputs out of chunking', async () => {

@@ -31,9 +31,7 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
 
     const feature =
       features.find((candidate) => normalizeText(candidate.featureName) === normalizedName) ??
-      features.find((candidate) =>
-        candidate.aliases.some((alias) => normalizeText(alias) === normalizedName),
-      ) ??
+      resolveClosestAlias(features, normalizedName) ??
       null;
 
     const filters = {
@@ -145,6 +143,35 @@ export class DefaultFeatureMatrixService implements FeatureMatrixService {
       examples: this.buildMatchesFromIds(chunks, relatedExampleIds, filters, 'search metadata fallback')
     };
   }
+}
+
+function resolveClosestAlias(
+  features: Awaited<ReturnType<ContentRepository['getFeatures']>>,
+  normalizedName: string,
+) {
+  return features
+    .filter((candidate) =>
+      candidate.aliases.some((alias) => normalizeText(alias) === normalizedName),
+    )
+    .sort((left, right) =>
+      compareAliasMatch(left.featureName, right.featureName, normalizedName),
+    )[0];
+}
+
+function compareAliasMatch(leftName: string, rightName: string, query: string): number {
+  const left = normalizeText(leftName);
+  const right = normalizeText(rightName);
+  const suffixDifference = Number(right.endsWith(query)) - Number(left.endsWith(query));
+  if (suffixDifference !== 0) {
+    return suffixDifference;
+  }
+
+  const prefixDifference = Number(right.startsWith(query)) - Number(left.startsWith(query));
+  if (prefixDifference !== 0) {
+    return prefixDifference;
+  }
+
+  return left.length - right.length || left.localeCompare(right);
 }
 
 function getFeatureEvidenceScore(query: string, chunk: DocumentChunk): number {
