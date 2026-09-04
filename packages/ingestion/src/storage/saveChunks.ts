@@ -329,7 +329,7 @@ function buildSearchVectorExpression(
   body: string,
   symbols: string,
 ): string {
-  return `to_tsvector('english', coalesce(${title}, '') || ' ' || coalesce(${summary}, '') || ' ' || coalesce(${body}, '') || ' ' || coalesce(array_to_string(${symbols}, ' '), ''))`;
+  return `to_tsvector('english', coalesce(${title}::text, '') || ' ' || coalesce(${summary}::text, '') || ' ' || coalesce(${body}::text, '') || ' ' || coalesce(array_to_string(${symbols}::text[], ' '), ''))`;
 }
 
 async function deleteStaleRows(

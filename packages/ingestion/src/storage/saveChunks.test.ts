@@ -54,7 +54,8 @@ describe('saveCatalogDataset PostgreSQL schema', () => {
     );
     const chunkUpsert = statements.find((statement) => statement.startsWith('INSERT INTO document_chunks'));
     expect(chunkUpsert).toContain('search_vector');
-    expect(chunkUpsert).toContain("coalesce(array_to_string($10, ' '), '')");
+    expect(chunkUpsert).toContain("coalesce($2::text, '')");
+    expect(chunkUpsert).toContain("coalesce(array_to_string($10::text[], ' '), '')");
     expect(chunkUpsert).toContain('search_vector = EXCLUDED.search_vector');
   });
 });
