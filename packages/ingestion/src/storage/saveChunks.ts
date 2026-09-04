@@ -22,12 +22,14 @@ export async function saveCatalogDataset(
             id, title, body, summary, framework, surface, doc_type, version, requires_pro,
             symbols, stability, url, source_path, example_url, package_names, release_date,
             content_hash, product, package_name, package_version, visibility,
-            symbol_kind, source_revision, signature, export_path, authority
+            symbol_kind, source_revision, signature, export_path, authority,
+            search_vector
           )
           VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9,
             $10, $11, $12, $13, $14, $15, $16,
-            $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+            $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+            ${buildSearchVectorExpression('$2', '$4', '$3', '$10')}
           )
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
@@ -54,7 +56,8 @@ export async function saveCatalogDataset(
             source_revision = EXCLUDED.source_revision,
             signature = EXCLUDED.signature,
             export_path = EXCLUDED.export_path,
-            authority = EXCLUDED.authority
+            authority = EXCLUDED.authority,
+            search_vector = EXCLUDED.search_vector
         `,
         [
           chunk.id,
@@ -244,7 +247,8 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
       source_revision text,
       signature text,
       export_path text,
-      authority integer NOT NULL DEFAULT 50
+      authority integer NOT NULL DEFAULT 50,
+      search_vector tsvector NOT NULL
     )
   `);
   await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS product text`);
@@ -256,6 +260,13 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
   await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS signature text`);
   await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS export_path text`);
   await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS authority integer NOT NULL DEFAULT 50`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS search_vector tsvector`);
+  await client.query(
+    `UPDATE ${tableName}
+     SET search_vector = ${buildSearchVectorExpression('title', 'summary', 'body', 'symbols')}
+     WHERE search_vector IS NULL`,
+  );
+  await client.query(`ALTER TABLE ${tableName} ALTER COLUMN search_vector SET NOT NULL`);
   await client.query(
     `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_surface_idx`)} ON ${tableName} (surface)`,
   );
@@ -266,8 +277,8 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
     `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_requires_pro_idx`)} ON ${tableName} (requires_pro)`,
   );
   await client.query(
-    `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_fulltext_v2_idx`)} ON ${tableName}
-     USING GIN (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || body || ' ' || array_to_string(symbols, ' ')))`,
+    `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_fulltext_v3_idx`)} ON ${tableName}
+     USING GIN (search_vector)`,
   );
   await client.query(`
     CREATE TABLE IF NOT EXISTS catalog_versions (
@@ -310,6 +321,15 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
   await client.query('CREATE TABLE IF NOT EXISTS catalog_capabilities (id text PRIMARY KEY, payload jsonb NOT NULL)');
   await client.query('CREATE INDEX IF NOT EXISTS catalog_capabilities_package_idx ON catalog_capabilities ((payload->>\'packageName\'))');
   await client.query('CREATE TABLE IF NOT EXISTS catalog_snapshot (id integer PRIMARY KEY CHECK (id = 1), payload jsonb NOT NULL)');
+}
+
+function buildSearchVectorExpression(
+  title: string,
+  summary: string,
+  body: string,
+  symbols: string,
+): string {
+  return `to_tsvector('english', coalesce(${title}, '') || ' ' || coalesce(${summary}, '') || ' ' || coalesce(${body}, '') || ' ' || coalesce(array_to_string(${symbols}, ' '), ''))`;
 }
 
 async function deleteStaleRows(

@@ -75,6 +75,62 @@ describe('source update service', () => {
     );
     expect(submoduleUpdateIndex).toBeGreaterThan(cloneIndex);
   });
+
+  it('falls back to remote submodule branches when a pinned revision is missing', async () => {
+    vi.stubEnv('REVOGRID_SOURCE_ROOT', '/tmp/revogrid-source');
+    fsMock.readdir.mockResolvedValue([]);
+    spawnMock.mockImplementation((_command: string, args: string[]) => {
+      if (args.slice(2).join(' ') === 'submodule update --init --recursive') {
+        return createGitProcess(
+          '',
+          1,
+          "fatal: remote error: upload-pack: not our ref missing-revision\nfatal: Fetched in submodule path 'docs', but it did not contain missing-revision",
+        );
+      }
+
+      return createGitProcess(gitOutput(args));
+    });
+
+    await expect(
+      updateGithubSources({
+        repositories: ['revogrid']
+      }),
+    ).resolves.toMatchObject({
+      repositories: [{ repository: 'revogrid' }]
+    });
+
+    const gitArgs = spawnMock.mock.calls.map(([, args]) => args as string[]);
+    expect(gitArgs).toContainEqual([
+      '-C',
+      '/tmp/revogrid-source',
+      'submodule',
+      'update',
+      '--init',
+      '--recursive',
+      '--remote'
+    ]);
+  });
+
+  it('does not hide unrelated submodule failures', async () => {
+    vi.stubEnv('REVOGRID_SOURCE_ROOT', '/tmp/revogrid-source');
+    fsMock.readdir.mockResolvedValue([]);
+    spawnMock.mockImplementation((_command: string, args: string[]) => {
+      if (args.slice(2).join(' ') === 'submodule update --init --recursive') {
+        return createGitProcess('', 1, 'fatal: Authentication failed');
+      }
+
+      return createGitProcess(gitOutput(args));
+    });
+
+    await expect(
+      updateGithubSources({
+        repositories: ['revogrid']
+      }),
+    ).rejects.toThrow('Authentication failed');
+
+    const gitArgs = spawnMock.mock.calls.map(([, args]) => args as string[]);
+    expect(gitArgs.some((args) => args.includes('--remote'))).toBe(false);
+  });
 });
 
 function gitOutput(args: string[]): string {
@@ -103,7 +159,7 @@ function gitOutput(args: string[]): string {
   return 'after-revision';
 }
 
-function createGitProcess(stdout: string): EventEmitter & {
+function createGitProcess(stdout: string, exitCode = 0, stderr = ''): EventEmitter & {
   stdout: EventEmitter;
   stderr: EventEmitter;
 } {
@@ -118,7 +174,10 @@ function createGitProcess(stdout: string): EventEmitter & {
     if (stdout) {
       child.stdout.emit('data', Buffer.from(stdout));
     }
-    child.emit('exit', 0);
+    if (stderr) {
+      child.stderr.emit('data', Buffer.from(stderr));
+    }
+    child.emit('exit', exitCode);
   });
 
   return child;

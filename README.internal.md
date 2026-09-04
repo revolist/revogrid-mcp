@@ -71,6 +71,11 @@ pnpm sources:update
 pnpm sources:update -- --remote
 ```
 
+Source refresh prefers the parent repositories' pinned submodule revisions. If an
+upstream gitlink references a revision that is no longer available, refresh
+retries the recursive submodules from their current remote branches. Other Git
+failures, including authentication and network errors, remain fatal.
+
 ## Environment variables
 
 ### App runtime

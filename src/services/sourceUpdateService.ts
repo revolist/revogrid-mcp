@@ -138,7 +138,21 @@ function isMountPointRemovalError(error: unknown): boolean {
 
 async function updateSubmodules(rootPath: string, githubToken: string | undefined): Promise<void> {
   await runGit(rootPath, ['submodule', 'sync', '--recursive'], githubToken);
-  await runGit(rootPath, ['submodule', 'update', '--init', '--recursive'], githubToken);
+  try {
+    await runGit(rootPath, ['submodule', 'update', '--init', '--recursive'], githubToken);
+  } catch (error) {
+    if (!isMissingSubmoduleRevisionError(error)) {
+      throw error;
+    }
+
+    await runGit(rootPath, ['submodule', 'update', '--init', '--recursive', '--remote'], githubToken);
+  }
+}
+
+function isMissingSubmoduleRevisionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message.includes('not our ref') || /Fetched in submodule path .* did not contain/m.test(message);
 }
 
 async function resolveCurrentRevision(rootPath: string, githubToken: string | undefined): Promise<string> {

@@ -81,7 +81,7 @@ export class PostgresContentRepository implements ContentRepository {
   ): Promise<DocumentChunk[]> {
     const values: unknown[] = [query];
     const conditions = [
-      `to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || body || ' ' || array_to_string(symbols, ' ')) @@ websearch_to_tsquery('english', $1)`,
+      `search_vector @@ websearch_to_tsquery('english', $1)`,
     ];
     const addCondition = (sql: string, value: unknown) => {
       values.push(value);
@@ -119,7 +119,7 @@ export class PostgresContentRepository implements ContentRepository {
        FROM ${this.safeTableName}
        WHERE ${conditions.join(' AND ')}
        ORDER BY ts_rank_cd(
-         to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || body || ' ' || array_to_string(symbols, ' ')),
+         search_vector,
          websearch_to_tsquery('english', $1)
        ) DESC, authority DESC, id
        LIMIT $${values.length}`,
