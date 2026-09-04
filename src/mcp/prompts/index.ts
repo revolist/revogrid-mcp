@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 export function registerPrompts(server: McpServer): void {
@@ -7,11 +7,11 @@ export function registerPrompts(server: McpServer): void {
     {
       title: 'RevoGrid Feature Check',
       description: 'Validate a feature claim and return docs/examples quickly.',
-      argsSchema: {
+      argsSchema: z.object({
         featureName: z.string().describe('Feature name or symbol to verify'),
         framework: z.string().optional().describe('Optional framework: react, vue, angular, svelte, or vanilla'),
         version: z.string().optional().describe('Optional target version')
-      }
+      })
     },
     (args) => {
       const featureName = args.featureName ?? '';
@@ -36,10 +36,10 @@ export function registerPrompts(server: McpServer): void {
     {
       title: 'RevoGrid Migration Checklist',
       description: 'Run a migration-oriented discovery flow from version A to B.',
-      argsSchema: {
+      argsSchema: z.object({
         fromVersion: z.string().describe('Source version, e.g. 4.15.0'),
         toVersion: z.string().describe('Target version, e.g. 5.2.0')
-      }
+      })
     },
     (args) => {
       return {
@@ -61,10 +61,10 @@ export function registerPrompts(server: McpServer): void {
     {
       title: 'RevoGrid Example Lookup Playbook',
       description: 'Find high-confidence RevoGrid examples for implementation guidance.',
-      argsSchema: {
+      argsSchema: z.object({
         objective: z.string().describe('What the example should cover'),
         framework: z.string().optional().describe('Optional framework filter')
-      }
+      })
     },
     (args) => {
       const objective = args.objective ?? '';

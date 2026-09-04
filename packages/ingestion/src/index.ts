@@ -1,4 +1,3 @@
-export * from './embeddings/embedChunks.js';
 export * from './fixtures/seedData.js';
 export * from './parsers/html.js';
 export * from './parsers/markdown.js';
@@ -9,5 +8,6 @@ export * from './sources/api.js';
 export * from './sources/changelog.js';
 export * from './sources/docs.js';
 export * from './sources/examples.js';
+export * from './sources/packageCatalog.js';
 export * from './sources/types.js';
 export * from './storage/saveChunks.js';

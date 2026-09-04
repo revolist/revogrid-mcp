@@ -31,7 +31,6 @@ export const REVOGRID_API_PATHS = [
 
 export const REVOGRID_PRO_DOC_PATHS = [
   'apps/portal/src/content/docs',
-  'apps/portal/src/content/demo',
   'apps/portal/src/content/legal',
   'packages/**/README.md',
   'packages/enterprise/plugins/pivot/PIVOT_FEATURES.md',
@@ -40,6 +39,10 @@ export const REVOGRID_PRO_DOC_PATHS = [
 ] as const;
 
 export const REVOGRID_PRO_EXAMPLE_PATHS = [
+  'apps/portal/src/content/demo',
+  'apps/portal/src/components',
+  'apps/demos/src/catalog',
+  'apps/demos/src/components',
   'examples/core/src/core-examples',
   'examples/components/src/components'
 ] as const;
@@ -51,6 +54,11 @@ export const REVOGRID_PRO_API_PATHS = [
   'test',
   'scripts',
   'packages/pro',
+  'packages/pivot',
+  'packages/gantt',
+  'packages/scheduler',
+  'packages/kanban',
+  'packages/collaborative-editing',
   'packages/enterprise',
   'packages/pro/plugins',
   'packages/enterprise/plugins',

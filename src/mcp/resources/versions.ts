@@ -11,6 +11,18 @@ export async function readAllVersionsResource(services: AppServices) {
 }
 
 export async function readCatalogCoverageResource(services: AppServices) {
-  const chunks = await services.contentRepository.getChunks();
-  return summarizeCatalogCoverage(chunks);
+  const [chunks, packages, capabilities, snapshot] = await Promise.all([
+    services.contentRepository.getChunks(),
+    services.contentRepository.getPackages(),
+    services.contentRepository.getCapabilities(),
+    services.contentRepository.getSnapshot()
+  ]);
+  return {
+    ...summarizeCatalogCoverage(chunks),
+    packageCount: packages.length,
+    capabilityCount: capabilities.length,
+    publicExportCount: capabilities.filter((item) => item.visibility === 'public').length,
+    packages: packages.map((item) => ({ name: item.name, version: item.version, product: item.product })),
+    snapshot
+  };
 }

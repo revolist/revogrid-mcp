@@ -1,14 +1,14 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
   buildCatalogDataset,
   getApiSources,
-  getCatalogEmbeddings,
   getChangelogSources,
   getDocsSources,
   getExampleSources,
-  saveCatalogDataset
+  saveCatalogDataset,
+  validateCatalogDataset
 } from '@revogrid-mcp/ingestion';
 import type { DocumentChunk, SeedDataset } from '@revogrid-mcp/content-model';
 import { Pool } from 'pg';
@@ -37,14 +37,15 @@ export async function runReindex(options: { updateSources?: boolean } = {}): Pro
     getApiSources(),
     buildCatalogDataset()
   ]);
-  const embeddings = getCatalogEmbeddings(dataset);
 
   const sourceInventory = { docs, examples, changelog, api };
+  validateCatalogDataset(dataset);
   const summary = buildIndexSummary(sourceInventory, dataset.chunks, absolutePath, config.CONTENT_BACKEND === 'postgres');
+  const temporaryPath = `${absolutePath}.${process.pid}.tmp`;
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(
-    absolutePath,
+    temporaryPath,
     JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
@@ -54,7 +55,8 @@ export async function runReindex(options: { updateSources?: boolean } = {}): Pro
           versionCount: dataset.versions.length,
           featureCount: dataset.features.length,
           migrationCount: dataset.migrations.length,
-          embeddingCount: embeddings.length
+          packageCount: dataset.packages?.length ?? 0,
+          capabilityCount: dataset.capabilities?.length ?? 0
         },
         summary,
         dataset
@@ -64,20 +66,26 @@ export async function runReindex(options: { updateSources?: boolean } = {}): Pro
     ),
   );
 
-  if (config.CONTENT_BACKEND === 'postgres') {
-    const pool = new Pool({
-      host: config.POSTGRES_HOST,
-      port: config.POSTGRES_PORT,
-      database: config.POSTGRES_DB,
-      user: config.POSTGRES_USER,
-      password: config.POSTGRES_PASSWORD
-    });
+  try {
+    if (config.CONTENT_BACKEND === 'postgres') {
+      const pool = new Pool({
+        host: config.POSTGRES_HOST,
+        port: config.POSTGRES_PORT,
+        database: config.POSTGRES_DB,
+        user: config.POSTGRES_USER,
+        password: config.POSTGRES_PASSWORD
+      });
 
-    try {
-      await saveCatalogDataset(pool, config.PGVECTOR_TABLE, dataset);
-    } finally {
-      await pool.end();
+      try {
+        await saveCatalogDataset(pool, config.DOCUMENT_TABLE, dataset);
+      } finally {
+        await pool.end();
+      }
     }
+    await rename(temporaryPath, absolutePath);
+  } catch (error) {
+    await rm(temporaryPath, { force: true });
+    throw error;
   }
 
   return sourceUpdate ? { dataset, summary, sourceUpdate } : { dataset, summary };

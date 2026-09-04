@@ -2,16 +2,17 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
+  CapabilityRecord,
   DocumentChunk,
   FeatureRecord,
   MigrationNoteRecord,
+  PackageRecord,
   SeedDataset,
   VersionRecord
 } from '@revogrid-mcp/content-model';
 import { SeedDatasetSchema } from '@revogrid-mcp/content-model';
 import { normalizeText, sha256, tokenize, unique } from '@revogrid-mcp/shared';
 
-import { embedChunks } from '../embeddings/embedChunks.js';
 import { stripHtml } from '../parsers/html.js';
 import {
   extractCodeBlocks,
@@ -30,6 +31,11 @@ import { getChangelogSources } from '../sources/changelog.js';
 import { getDocsSources } from '../sources/docs.js';
 import { getExampleSources } from '../sources/examples.js';
 import { resolveSourceRoot } from '../sources/_shared.js';
+import {
+  buildPublishedPackageCatalog,
+  type PublishedPackageCatalog,
+  type PublicExport
+} from '../sources/packageCatalog.js';
 import type { SourceCategory, SourceFile, SourceRepository } from '../sources/types.js';
 
 type PackageVersions = {
@@ -47,46 +53,101 @@ type SourceDocument = {
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx']);
 const TEXT_LIKE_EXTENSIONS = new Set(['.md', '.mdx', '.astro', '.vue', '.svelte', '.ts', '.tsx', '.js', '.jsx']);
-const FEATURE_STOP_WORDS = new Set(['index', 'overview', 'guide', 'api', 'docs', 'installation']);
 
 export async function buildCatalogDataset(): Promise<SeedDataset> {
-  const [docs, examples, changelog, api, packageVersions] = await Promise.all([
+  const [revogridRoot, revogridProRoot] = await Promise.all([
+    resolveSourceRoot(import.meta.url, 'revogrid'),
+    resolveSourceRoot(import.meta.url, 'revogrid-pro')
+  ]);
+  const [docs, examples, changelog, api, packageVersions, packageCatalog] = await Promise.all([
     getDocsSources(),
     getExampleSources(),
     getChangelogSources(),
     getApiSources(),
-    getPackageVersions()
+    getPackageVersions(),
+    buildPublishedPackageCatalog({ revogrid: revogridRoot, 'revogrid-pro': revogridProRoot })
   ]);
 
   const normalizedDocuments = (
     await Promise.all(
       deduplicateSources([...docs, ...examples, ...changelog, ...api]).map((source) =>
-        normalizeSourceFile(source, packageVersions),
+        normalizeSourceFile(source, packageVersions, packageCatalog),
       ),
     )
   )
     .filter((document): document is SourceDocument => Boolean(document))
     .sort((left, right) => left.chunk.id.localeCompare(right.chunk.id));
   const chunks = normalizedDocuments.map((document) => document.chunk);
+  const capabilities = deriveCapabilities(chunks, packageCatalog);
   const canonicalPluginFeatures = deriveCanonicalPluginFeatures(chunks);
-  const derivedFeatures = deriveFeatures(chunks);
+  const capabilityFeatures = deriveFeatureRecordsFromCapabilities(capabilities);
   const explicitFeatures = extractFeatureArtifacts(normalizedDocuments);
 
   return SeedDatasetSchema.parse({
     chunks,
     versions: deriveVersions(chunks, packageVersions),
-    features: mergeFeatureRecords([...canonicalPluginFeatures, ...derivedFeatures], explicitFeatures),
-    migrations: deriveMigrations(normalizedDocuments, packageVersions.revogrid)
+    features: mergeFeatureRecords([...canonicalPluginFeatures, ...capabilityFeatures], explicitFeatures),
+    migrations: deriveMigrations(normalizedDocuments, packageVersions.revogrid),
+    packages: packageCatalog.packages,
+    capabilities,
+    snapshot: {
+      schemaVersion: 2,
+      generatedAt: new Date().toISOString(),
+      sourceRevisions: packageCatalog.sourceRevisions,
+      packageCount: packageCatalog.packages.length,
+      capabilityCount: capabilities.length,
+      publicExportCount: packageCatalog.exports.length,
+      exampleCount: chunks.filter(isExampleChunk).length
+    }
   });
 }
 
-export function getCatalogEmbeddings(dataset: SeedDataset) {
-  return embedChunks(dataset.chunks);
+const REQUIRED_PUBLISHED_PACKAGES = [
+  '@revolist/revogrid',
+  '@revolist/revogrid-pro',
+  '@revolist/pivot',
+  '@revolist/gantt',
+  '@revolist/scheduler',
+  '@revolist/kanban',
+  '@revolist/revogrid-collaborative-editing',
+  '@revolist/revogrid-enterprise'
+] as const;
+
+export function validateCatalogDataset(dataset: SeedDataset): void {
+  const errors: string[] = [];
+  const packageNames = new Set((dataset.packages ?? []).map((item) => item.name));
+  for (const packageName of REQUIRED_PUBLISHED_PACKAGES) {
+    if (!packageNames.has(packageName)) errors.push(`missing published package ${packageName}`);
+  }
+  for (const packageRecord of dataset.packages ?? []) {
+    if (packageRecord.exportEntrypoints.length === 0) {
+      errors.push(`package ${packageRecord.name} has no published entrypoint metadata`);
+    }
+    if (!(dataset.capabilities ?? []).some((item) => item.packageName === packageRecord.name)) {
+      errors.push(`package ${packageRecord.name} has no public capabilities`);
+    }
+  }
+  const representedExports = (dataset.capabilities ?? []).filter((item) => !item.id.startsWith('package:'));
+  if (dataset.snapshot && representedExports.length < dataset.snapshot.publicExportCount) {
+    errors.push(`only ${representedExports.length} of ${dataset.snapshot.publicExportCount} public exports are represented`);
+  }
+  if (!dataset.chunks.some((item) => item.docType === 'example' || item.docType === 'live-demo')) {
+    errors.push('catalog has no indexed examples');
+  }
+  if (dataset.chunks.some((item) => item.sourcePath?.includes('/content/docs/guides/') && item.visibility !== 'public')) {
+    errors.push('portal guides must be public');
+  }
+  const indexedExamples = dataset.chunks.filter(isExampleChunk).length;
+  if (dataset.snapshot && indexedExamples !== dataset.snapshot.exampleCount) {
+    errors.push(`snapshot declares ${dataset.snapshot.exampleCount} examples but indexed ${indexedExamples}`);
+  }
+  if (errors.length > 0) throw new Error(`Catalog coverage validation failed: ${errors.join('; ')}`);
 }
 
 async function normalizeSourceFile(
   source: SourceFile,
   packageVersions: PackageVersions,
+  packageCatalog: PublishedPackageCatalog,
 ): Promise<SourceDocument | null> {
   const extension = path.extname(source.absolutePath).toLowerCase();
   if (!TEXT_LIKE_EXTENSIONS.has(extension)) {
@@ -109,7 +170,16 @@ async function normalizeSourceFile(
   const docType = detectDocType(source.category, source.relativePath, extension);
   const title = cleanTitle(rawTitle, source, docType);
   const framework = detectFramework(source.relativePath, title);
-  const surface = detectSurface(source, title, resolvedContent);
+  const packageMetadata = resolvePackageMetadata(source, title, packageCatalog);
+  const visibility = resolveVisibility(source, packageCatalog);
+  const detectedSurface = detectSurface(source, title, resolvedContent);
+  const surface = visibility === 'public'
+    ? packageMetadata.product === 'pivot' || detectedSurface === 'pivot'
+      ? 'pivot'
+      : packageMetadata.product === 'core'
+        ? 'core'
+        : 'pro'
+    : detectedSurface;
   const requiresPro = inferRequiresPro(source, title, resolvedContent, surface);
   const plainBody = normalizeBody(body, extension, typeInstructions);
   if (!plainBody) {
@@ -145,7 +215,16 @@ async function normalizeSourceFile(
       sourcePath: `${source.repository}/${source.relativePath}`.replace(/\\/g, '/'),
       exampleUrl: extractExampleUrl(source, resolvedContent, url),
       packageNames: extractPackageNames(resolvedContent),
-      releaseDate: extractReleaseDate(attributes, body, source.relativePath)
+      releaseDate: extractReleaseDate(attributes, body, source.relativePath),
+      product: packageMetadata.product,
+      packageName: packageMetadata.packageName,
+      packageVersion: packageMetadata.packageVersion,
+      visibility,
+      symbolKind: packageMetadata.publicExport?.symbolKind,
+      sourceRevision: packageMetadata.sourceRevision,
+      signature: packageMetadata.publicExport?.signature,
+      exportPath: packageMetadata.publicExport?.exportPath,
+      authority: resolveAuthority(source, packageCatalog)
     }
   };
 }
@@ -590,59 +669,21 @@ function deriveVersions(chunks: DocumentChunk[], packageVersions: PackageVersion
   return [...byVersion.values()].sort((left, right) => compareVersionsDesc(left.version, right.version));
 }
 
-function deriveFeatures(chunks: DocumentChunk[]): FeatureRecord[] {
-  const groups = new Map<string, FeatureRecord>();
-
-  for (const chunk of chunks) {
-    if (chunk.docType === 'migration' || chunk.surface === 'migration' || chunk.surface === 'changelog') {
-      continue;
-    }
-
-    const featureName = normalizeFeatureName(chunk);
-    if (!featureName || FEATURE_STOP_WORDS.has(featureName)) {
-      continue;
-    }
-
-    const existing = groups.get(featureName);
-    if (!existing) {
-      groups.set(featureName, {
-        featureName,
-        supported: true,
-        requiresPro: chunk.requiresPro,
-        stability: chunk.stability,
-        supportedFrameworks: chunk.framework ? [chunk.framework] : ['vanilla'],
-        notes: chunk.summary ? [chunk.summary] : [],
-        relatedChunkIds: isDocChunk(chunk) ? [chunk.id] : [],
-        relatedExampleIds: isExampleChunk(chunk) ? [chunk.id] : [],
-        fallbackApproach: chunk.requiresPro
-          ? 'Use adjacent RevoGrid Core patterns if the required Pro package or license is unavailable.'
-          : undefined,
-        aliases: unique([featureName, ...chunk.symbols.map((symbol) => normalizeText(symbol)).slice(0, 8)])
-      });
-      continue;
-    }
-
-    existing.requiresPro ||= chunk.requiresPro;
-    existing.stability ??= chunk.stability;
-    existing.supportedFrameworks = unique([...existing.supportedFrameworks, chunk.framework ?? 'vanilla']);
-    existing.notes = unique([...(existing.notes ?? []), ...(chunk.summary ? [chunk.summary] : [])]).slice(0, 4);
-    existing.relatedChunkIds = unique([...existing.relatedChunkIds, ...(isDocChunk(chunk) ? [chunk.id] : [])]);
-    existing.relatedExampleIds = unique([
-      ...existing.relatedExampleIds,
-      ...(isExampleChunk(chunk) ? [chunk.id] : [])
-    ]);
-    existing.aliases = unique([
-      ...existing.aliases,
-      ...chunk.symbols.map((symbol) => normalizeText(symbol)).slice(0, 6)
-    ]);
-  }
-
-  return [...groups.values()]
-    .sort((left, right) => left.featureName.localeCompare(right.featureName))
-    .map((feature) => ({
-      ...feature,
-      aliases: unique(feature.aliases)
-    }));
+function deriveFeatureRecordsFromCapabilities(capabilities: CapabilityRecord[]): FeatureRecord[] {
+  return capabilities.map((capability) => ({
+    featureName: capability.id === 'package:@revolist/scheduler' ? 'event scheduler' : capability.name,
+    supported: true,
+    requiresPro: capability.requiresPro,
+    stability: capability.stability,
+    supportedFrameworks: capability.frameworks,
+    notes: [`Public export from ${capability.packageName}@${capability.packageVersion}.`],
+    relatedChunkIds: capability.evidence.map((item) => item.chunkId),
+    relatedExampleIds: capability.relatedExampleIds,
+    fallbackApproach: capability.requiresPro
+      ? 'Use adjacent RevoGrid Core patterns if the required Pro package or license is unavailable.'
+      : undefined,
+    aliases: capability.aliases
+  }));
 }
 
 function deriveCanonicalPluginFeatures(chunks: DocumentChunk[]): FeatureRecord[] {
@@ -693,6 +734,238 @@ function deriveCanonicalPluginFeatures(chunks: DocumentChunk[]): FeatureRecord[]
       } satisfies FeatureRecord;
     })
     .sort((left, right) => left.featureName.localeCompare(right.featureName));
+}
+
+function deriveCapabilities(
+  chunks: DocumentChunk[],
+  packageCatalog: PublishedPackageCatalog,
+): CapabilityRecord[] {
+  const packageMap = new Map(packageCatalog.packages.map((record) => [record.name, record]));
+  const chunksBySymbol = new Map<string, DocumentChunk[]>();
+  const chunksBySource = new Map<string, DocumentChunk[]>();
+  for (const chunk of chunks) {
+    if (chunk.sourcePath) appendToMap(chunksBySource, chunk.sourcePath.replace(/^revogrid(?:-pro)?\//, ''), chunk);
+    for (const symbol of chunk.symbols) appendToMap(chunksBySymbol, normalizeText(symbol), chunk);
+  }
+
+  const exportedCapabilities: CapabilityRecord[] = packageCatalog.exports.map((publicExport) => {
+    const packageRecord = packageMap.get(publicExport.packageName);
+    if (!packageRecord) {
+      throw new Error(`Public export ${publicExport.name} has no package record for ${publicExport.packageName}`);
+    }
+    const related = unique([
+      ...(chunksBySource.get(publicExport.sourcePath) ?? []),
+      ...(chunksBySymbol.get(normalizeText(publicExport.name)) ?? [])
+    ])
+      .filter((chunk) => chunk.packageName === publicExport.packageName)
+      .sort((left, right) => (right.authority ?? 50) - (left.authority ?? 50))
+      .slice(0, 12);
+    const dependencies = unique([
+      ...packageRecord.dependencies,
+      ...extractRelatedSymbols(related, /(?:plugin|provider|service|manager)$/i),
+    ]);
+    const configuration = extractRelatedSymbols(related, /(?:config|options|props)$/i);
+    const relatedExampleIds = related.filter(isExampleChunk).map((chunk) => chunk.id);
+    const extendedSymbols = [...(publicExport.signature?.matchAll(/\bextends\s+([A-Za-z_$][\w$]*)/g) ?? [])]
+      .map((match) => match[1])
+      .filter((value): value is string => Boolean(value));
+
+    return {
+      id: buildCapabilityId(publicExport.packageName, publicExport.name),
+      name: publicExport.name,
+      aliases: unique([
+        publicExport.name,
+        splitIdentifierName(publicExport.name),
+        splitIdentifierName(publicExport.name).replace(/\s+(plugin|component)$/, '')
+      ]),
+      product: packageRecord.product,
+      packageName: packageRecord.name,
+      packageVersion: packageRecord.version,
+      tier: packageRecord.tier,
+      requiresPro: packageRecord.requiresPro,
+      visibility: 'public',
+      stability: related.some((chunk) => chunk.stability === 'deprecated') ? 'deprecated' : 'stable',
+      frameworks: unique(
+        related.map((chunk) => chunk.framework).filter((value): value is NonNullable<typeof value> => Boolean(value)),
+      ).length > 0
+        ? unique(related.map((chunk) => chunk.framework).filter((value): value is NonNullable<typeof value> => Boolean(value)))
+        : ['vanilla'],
+      symbolKind: publicExport.symbolKind,
+      exportPath: publicExport.exportPath,
+      signature: publicExport.signature,
+      configuration,
+      configurationKeys: publicExport.configurationKeys ?? [],
+      methods: unique([
+        ...(publicExport.methods ?? []),
+        ...extractRelatedSymbols(related, /^(?:get|set|add|remove|update|apply|clear|open|close|export|import)/i)
+      ]),
+      events: unique([
+        ...(publicExport.events ?? []),
+        ...extractRelatedSymbols(related, /(?:event|before|after|change|changed)$/i)
+      ]),
+      dependencies,
+      peerDependencies: packageRecord.peerDependencies,
+      relations: [
+        ...dependencies
+          .filter((dependency) => dependency.startsWith('@revolist/'))
+          .map((dependency) => ({ type: 'dependsOn' as const, targetId: `package:${dependency}` })),
+        ...configuration.map((symbol) => ({
+          type: 'configuredBy' as const,
+          targetId: buildCapabilityId(packageRecord.name, symbol)
+        })),
+        ...extendedSymbols.map((symbol) => ({
+          type: 'extends' as const,
+          targetId: buildCapabilityId(packageRecord.name, symbol)
+        })),
+        ...relatedExampleIds.map((id) => ({ type: 'demonstratedBy' as const, targetId: id }))
+      ],
+      evidence: related.map((chunk) => ({
+        chunkId: chunk.id,
+        repository: chunk.sourcePath?.startsWith('revogrid-pro/') ? 'revogrid-pro' : 'revogrid',
+        ...(chunk.sourceRevision ? { revision: chunk.sourceRevision } : {}),
+        ...(chunk.sourcePath ? { sourcePath: chunk.sourcePath } : {}),
+        url: chunk.url,
+        authority: chunk.authority ?? 50
+      })),
+      relatedExampleIds
+    };
+  });
+  const packageCapabilities: CapabilityRecord[] = packageCatalog.packages.map((packageRecord) => {
+    const capabilityName = packageRecord.product;
+    const related = chunks
+      .filter((chunk) => chunk.product === packageRecord.product && chunk.visibility === 'public')
+      .sort((left, right) => (right.authority ?? 50) - (left.authority ?? 50))
+      .slice(0, 12);
+    return {
+      id: `package:${packageRecord.name}`,
+      name: capabilityName,
+      aliases: unique([
+        capabilityName,
+        packageRecord.name,
+        `${packageRecord.product} grid`,
+        ...(packageRecord.product === 'scheduler' ? ['event scheduler'] : [])
+      ]),
+      product: packageRecord.product,
+      packageName: packageRecord.name,
+      packageVersion: packageRecord.version,
+      tier: packageRecord.tier,
+      requiresPro: packageRecord.requiresPro,
+      visibility: 'public',
+      stability: 'stable',
+      frameworks: ['react', 'vue', 'angular', 'svelte', 'vanilla'],
+      symbolKind: 'plugin',
+      exportPath: packageRecord.name,
+      configuration: [],
+      configurationKeys: [],
+      methods: [],
+      events: [],
+      dependencies: packageRecord.dependencies,
+      peerDependencies: packageRecord.peerDependencies,
+      relations: [
+        ...packageRecord.dependencies
+          .filter((dependency) => dependency.startsWith('@revolist/'))
+          .map((dependency) => ({ type: 'dependsOn' as const, targetId: `package:${dependency}` })),
+        ...related.filter(isExampleChunk).map((chunk) => ({
+          type: 'demonstratedBy' as const,
+          targetId: chunk.id
+        }))
+      ],
+      evidence: related.map((chunk) => ({
+        chunkId: chunk.id,
+        repository: chunk.sourcePath?.startsWith('revogrid-pro/') ? 'revogrid-pro' : 'revogrid',
+        ...(chunk.sourceRevision ? { revision: chunk.sourceRevision } : {}),
+        ...(chunk.sourcePath ? { sourcePath: chunk.sourcePath } : {}),
+        url: chunk.url,
+        authority: chunk.authority ?? 50
+      })),
+      relatedExampleIds: related.filter(isExampleChunk).map((chunk) => chunk.id)
+    };
+  });
+  return [...packageCapabilities, ...exportedCapabilities].sort((left, right) =>
+    left.packageName.localeCompare(right.packageName) || left.name.localeCompare(right.name),
+  );
+}
+
+function appendToMap<TKey, TValue>(map: Map<TKey, TValue[]>, key: TKey, value: TValue): void {
+  const values = map.get(key);
+  if (values) values.push(value);
+  else map.set(key, [value]);
+}
+
+function resolvePackageMetadata(
+  source: SourceFile,
+  title: string,
+  packageCatalog: PublishedPackageCatalog,
+): {
+  product: PackageRecord['product'];
+  packageName: string;
+  packageVersion: string;
+  sourceRevision?: string;
+  publicExport?: PublicExport;
+} {
+  const pathValue = source.relativePath.replace(/\\/g, '/');
+  const publicExport = packageCatalog.exports.find((candidate) =>
+    candidate.sourcePath === pathValue,
+  );
+  const inferredProduct = inferProduct(pathValue, title, source.repository);
+  const packageRecord = packageCatalog.packages.find((candidate) =>
+    candidate.name === publicExport?.packageName || candidate.product === inferredProduct,
+  ) ?? packageCatalog.packages.find((candidate) => candidate.product === (source.repository === 'revogrid' ? 'core' : 'pro'));
+
+  return {
+    product: packageRecord?.product ?? (source.repository === 'revogrid' ? 'core' : 'pro'),
+    packageName: packageRecord?.name ?? (source.repository === 'revogrid' ? '@revolist/revogrid' : '@revolist/revogrid-pro'),
+    packageVersion: packageRecord?.version ?? '0.0.0',
+    ...(packageRecord?.sourceRevision ? { sourceRevision: packageRecord.sourceRevision } : {}),
+    ...(publicExport ? { publicExport } : {})
+  };
+}
+
+function inferProduct(
+  sourcePath: string,
+  title: string,
+  repository: SourceRepository,
+): PackageRecord['product'] {
+  if (repository === 'revogrid') return 'core';
+  const value = `${sourcePath} ${title}`.toLowerCase();
+  if (value.includes('collaborative')) return 'collaboration';
+  if (value.includes('/pivot') || value.includes('pivot')) return 'pivot';
+  if (value.includes('/gantt') || value.includes('gantt')) return 'gantt';
+  if (value.includes('event-scheduler') || value.includes('/scheduler') || value.includes('scheduler')) return 'scheduler';
+  if (value.includes('/kanban') || value.includes('kanban')) return 'kanban';
+  if (sourcePath.startsWith('packages/enterprise/')) return 'enterprise';
+  return 'pro';
+}
+
+function resolveVisibility(
+  source: SourceFile,
+  packageCatalog: PublishedPackageCatalog,
+): DocumentChunk['visibility'] {
+  if (source.category === 'docs' || source.category === 'examples') return 'public';
+  if (source.relativePath.includes('/content/docs/api/')) return 'public';
+  return packageCatalog.publicSourcePaths.has(`${source.repository}:${source.relativePath}`)
+    ? 'public'
+    : 'internal';
+}
+
+function resolveAuthority(source: SourceFile, packageCatalog: PublishedPackageCatalog): number {
+  if (packageCatalog.publicSourcePaths.has(`${source.repository}:${source.relativePath}`)) return 100;
+  if (source.relativePath.includes('/content/docs/api/')) return 90;
+  if (source.category === 'docs') return 80;
+  if (source.category === 'examples') return 70;
+  return 30;
+}
+
+function extractRelatedSymbols(chunks: DocumentChunk[], pattern: RegExp): string[] {
+  return unique(chunks.flatMap((chunk) => chunk.symbols).filter((symbol) => pattern.test(symbol))).slice(0, 24);
+}
+
+function buildCapabilityId(packageName: string, name: string): string {
+  return `${packageName}:${name}`.replace(/[^a-z0-9:@/-]+/gi, '-').toLowerCase();
+}
+
+function splitIdentifierName(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').toLowerCase();
 }
 
 function isChunkRelatedToPlugin(chunk: DocumentChunk, slug: string): boolean {
@@ -940,6 +1213,10 @@ function detectSurface(source: SourceFile, title: string, content: string): Docu
   if (source.category === 'changelog') {
     return value.includes('migration') || source.relativePath.includes('/migrations/') ? 'migration' : 'changelog';
   }
+  if (source.category === 'docs' || source.category === 'examples') {
+    if (documentIdentity.includes('pivot')) return 'pivot';
+    return source.repository === 'revogrid-pro' ? 'pro' : 'core';
+  }
   if (documentIdentity.includes('columntype')) {
     return 'columntype';
   }
@@ -1076,6 +1353,11 @@ function buildCanonicalUrl(source: SourceFile): string {
     if (normalizedPath.startsWith('apps/demos/src/catalog/')) {
       return 'https://pro.rv-grid.com/demo';
     }
+
+    if (normalizedPath.startsWith('packages/')) {
+      const packageSlug = normalizedPath.split('/')[1] ?? 'revogrid-pro';
+      return `https://pro.rv-grid.com/api/${packageSlug}`;
+    }
   }
 
   return 'https://rv-grid.com';
@@ -1163,25 +1445,6 @@ function extractReleaseDate(
 
 function firstSentence(body: string): string {
   return body.split(/(?<=[.!?])\s+/)[0]?.trim() ?? body.slice(0, 180);
-}
-
-function normalizeFeatureName(chunk: DocumentChunk): string | null {
-  if (chunk.surface === 'pivot') {
-    return 'pivot';
-  }
-  if (chunk.symbols.some((symbol) => normalizeText(symbol) === 'beforeedit')) {
-    return 'beforeedit';
-  }
-  if (chunk.surface === 'columntype') {
-    return 'custom column type';
-  }
-
-  const normalizedTitle = normalizeText(chunk.title)
-    .replace(/\b(demo|guide|api|example|data grid|table|react|vue|angular|svelte)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return normalizedTitle || null;
 }
 
 function isDocChunk(chunk: DocumentChunk): boolean {

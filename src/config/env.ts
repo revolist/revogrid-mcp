@@ -37,6 +37,7 @@ const AppEnvSchema = z.object({
   POSTGRES_DB: z.string().default('revogrid_mcp'),
   POSTGRES_USER: z.string().default('postgres'),
   POSTGRES_PASSWORD: z.string().default('postgres'),
+  DOCUMENT_TABLE: z.string().optional(),
   PGVECTOR_TABLE: z.string().default('document_chunks'),
   REINDEX_OUTPUT: z.string().default('data/catalog.json'),
   REVOGRID_SOURCE_ROOT: z.string().optional(),
@@ -46,10 +47,7 @@ const AppEnvSchema = z.object({
   ENABLE_RATE_LIMITING: booleanFromEnv.default(false),
   RATE_LIMIT_MAX: integerFromEnv.default(60),
   RATE_LIMIT_WINDOW_MS: integerFromEnv.default(60_000),
-  WEBHOOK_TOKEN: z.string({
-    required_error: 'WEBHOOK_TOKEN is required.',
-    invalid_type_error: 'WEBHOOK_TOKEN is required.'
-  }).min(1, 'WEBHOOK_TOKEN is required.'),
+  WEBHOOK_TOKEN: z.string({ error: 'WEBHOOK_TOKEN is required.' }).min(1, 'WEBHOOK_TOKEN is required.'),
   SOURCE_UPDATE_GITHUB_TOKEN: z.string().optional(),
   GITHUB_TOKEN: z.string().optional()
 });
@@ -61,6 +59,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 
   return {
     ...parsed,
+    DOCUMENT_TABLE: parsed.DOCUMENT_TABLE ?? parsed.PGVECTOR_TABLE,
     ALLOWED_ORIGINS: parsed.ALLOWED_ORIGINS.split(',')
       .map((origin) => origin.trim())
       .filter(Boolean)

@@ -1,6 +1,6 @@
 # RevoGrid MCP
 
-Hosted Streamable HTTP MCP server for version-aware [RevoGrid](https://rv-grid.com) retrieval. RevoGrid is a JS Data Grid for high-performance, spreadsheet-like tables in modern web apps. In v1 this MCP server is read-only and focuses on:
+Hosted, stateless Streamable HTTP MCP server and source-grounded implementation copilot for [RevoGrid](https://rv-grid.com). The service is read-only: it catalogs supported exports, plans complex integrations, and validates proposed usage without executing or editing consumer code.
 
 - current [RevoGrid docs](https://github.com/revolist/revogrid) and [examples](https://demo.rv-grid.com)
 - version-aware migration guidance
@@ -61,14 +61,20 @@ Hosted endpoint: `https://mcp.rv-grid.com`
 
 ## What it exposes
 
-- Streamable HTTP MCP at `/` (unified Core, Pro, and Enterprise knowledge; no access token)
+- Stateless Streamable HTTP MCP at `/` with 2026 protocol support and compatible 2025-era JSON responses (unified Core, Pro, and Enterprise knowledge; no access token)
 - Token-free `/pro` compatibility alias for existing clients
 - Health endpoint at `/health`
+- Readiness and snapshot endpoint at `/ready`
+- Catalog and per-tool operational metrics at `/stats`
 - Tools:
   - `search_revogrid_docs`
   - `find_examples`
   - `resolve_feature_matrix`
   - `get_migration_notes`
+  - `list_revogrid_capabilities`
+  - `inspect_revogrid_api`
+  - `plan_revogrid_implementation`
+  - `validate_revogrid_usage`
 - Resources:
   - `revogrid://versions/latest`
   - `revogrid://versions/all`
@@ -76,6 +82,10 @@ Hosted endpoint: `https://mcp.rv-grid.com`
   - `revogrid://frameworks/react/getting-started`
   - `revogrid://frameworks/vue/getting-started`
   - `revogrid://frameworks/angular/getting-started`
+  - `revogrid://capabilities/{id}`
+  - `revogrid://symbols/{qualifiedName}`
+  - `revogrid://packages/{packageName}`
+  - `revogrid://examples/{id}`
 
 ## What info can it return
 
@@ -87,6 +97,19 @@ The server provides indexed chunks for:
 - API/type definitions (feature and symbol-oriented chunks)
 - feature matrix and version mapping
 - Pro and Enterprise capabilities, labeled with `requiresPro` where applicable
+
+The package-aware catalog covers `@revolist/revogrid`, `@revolist/revogrid-pro`, `@revolist/pivot`, `@revolist/gantt`, `@revolist/scheduler`, `@revolist/kanban`, `@revolist/revogrid-collaborative-editing`, and `@revolist/revogrid-enterprise`. Public APIs are computed from published TypeScript export entrypoints. Implementation source that is not reachable from those entrypoints is retained as internal evidence and is returned only when a caller explicitly opts in.
+
+For implementation work, use this order:
+
+1. `list_revogrid_capabilities` to discover exact capability names and package ownership.
+2. `inspect_revogrid_api` to resolve imports, signatures, dependencies, events, and evidence.
+3. `plan_revogrid_implementation` to compose a deterministic package and lifecycle blueprint.
+4. `validate_revogrid_usage` to statically check imports, configuration, framework/version compatibility, dependencies, deprecations, and licensing metadata.
+
+Capability listing intentionally returns compact summaries and `revogrid://` links; use API inspection or read the linked resource only when full signatures and evidence are needed. Pagination cursors are opaque and snapshot/filter-bound, so clients should restart without a cursor when the server reports a stale cursor. Resource reads advertise short public cache hints, and server-side capability indexes are reused until an atomic catalog promotion changes the snapshot.
+
+Every catalog result includes source provenance where available: repository revision, package and version, source path, canonical documentation URL, and match reason. Core, Pro, and Enterprise knowledge remains available through the unified token-free endpoint; `requiresPro` explains package and license requirements but never gates retrieval.
 
 ## Install in AI clients
 

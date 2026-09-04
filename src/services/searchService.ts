@@ -13,7 +13,7 @@ export class DefaultRevogridSearchService implements RevogridSearchService {
     query: string,
     filters: SearchQueryFilters,
   ): Promise<SearchMatch[]> {
-    const chunks = await this.repository.getChunks();
+    const chunks = await this.getCandidateChunks(query, filters);
     return hybridSearch(query, chunks, filters, 'docs');
   }
 
@@ -21,10 +21,18 @@ export class DefaultRevogridSearchService implements RevogridSearchService {
     query: string,
     filters: SearchQueryFilters,
   ): Promise<SearchMatch[]> {
-    const chunks = (await this.repository.getChunks()).filter(
+    const chunks = (await this.getCandidateChunks(query, {
+      ...filters,
+      docTypes: ['example', 'live-demo']
+    })).filter(
       (chunk) => chunk.docType === 'example' || chunk.docType === 'live-demo',
     );
 
     return hybridSearch(query, chunks, filters, 'examples');
+  }
+
+  private async getCandidateChunks(query: string, filters: SearchQueryFilters) {
+    if (!this.repository.findLexicalCandidates) return this.repository.getChunks();
+    return this.repository.findLexicalCandidates(query, filters, Math.max(filters.limit * 20, 200));
   }
 }

@@ -18,6 +18,12 @@ export function filterChunks(
   const targetVersion = normalizeVersion(filters.version);
 
   return chunks.filter((chunk) => {
+    const requestedVisibility = filters.visibility ?? (filters.surface === 'internal' ? 'internal' : 'public');
+    const chunkVisibility = chunk.visibility ?? (chunk.surface === 'internal' ? 'internal' : 'public');
+    if (chunkVisibility !== requestedVisibility) {
+      return false;
+    }
+
     if (filters.framework && chunk.framework && chunk.framework !== filters.framework) {
       return false;
     }
@@ -33,6 +39,10 @@ export function filterChunks(
     if (filters.docTypes && !filters.docTypes.includes(chunk.docType)) {
       return false;
     }
+
+    if (filters.product && chunk.product !== filters.product) return false;
+    if (filters.packageName && chunk.packageName !== filters.packageName) return false;
+    if (filters.symbolKind && chunk.symbolKind !== filters.symbolKind) return false;
 
     if (targetVersion && normalizeVersion(chunk.version) && normalizeVersion(chunk.version) !== targetVersion) {
       return false;
@@ -64,6 +74,8 @@ export function keywordSearch(
 
       let score = 0;
       const reasons = new Set<string>();
+
+      score += (chunk.authority ?? 50) / 20;
 
       if (analysis.normalized && haystack.includes(analysis.normalized)) {
         score += 10;

@@ -1,8 +1,17 @@
 import type {
+  CapabilityRecord,
+  CapabilitySummary,
+  CatalogSnapshot,
   DocumentChunk,
   FeatureRecord,
   Framework,
-  MigrationNoteRecord
+  MigrationNoteRecord,
+  PackageRecord,
+  Product,
+  Stability,
+  SymbolKind,
+  Tier,
+  Visibility
 } from '@revogrid-mcp/content-model';
 import type { ContentRepository } from '../repositories/contentRepository.js';
 
@@ -17,6 +26,7 @@ export type AppServices = {
   searchService: RevogridSearchService;
   featureService: FeatureMatrixService;
   migrationService: MigrationService;
+  developerService: DeveloperCopilotService;
 };
 
 export type SearchQueryFilters = {
@@ -25,6 +35,10 @@ export type SearchQueryFilters = {
   surface?: DocumentChunk['surface'] | undefined;
   requiresPro?: boolean | undefined;
   docTypes?: DocumentChunk['docType'][] | undefined;
+  product?: Product | undefined;
+  packageName?: string | undefined;
+  visibility?: Visibility | undefined;
+  symbolKind?: SymbolKind | undefined;
   limit: number;
 };
 
@@ -64,4 +78,26 @@ export type MigrationService = {
       framework?: Framework | undefined;
     },
   ) => Promise<MigrationResolution>;
+};
+
+export type CapabilityFilters = {
+  product?: Product | undefined;
+  packageName?: string | undefined;
+  framework?: Framework | undefined;
+  version?: string | undefined;
+  stability?: Stability | undefined;
+  tier?: Tier | undefined;
+  cursor?: string | undefined;
+  limit: number;
+};
+
+export type DeveloperCopilotService = {
+  listCapabilities: (filters: CapabilityFilters) => Promise<{ results: CapabilitySummary[]; nextCursor?: string }>;
+  inspectApi: (query: string, options: { packageName?: string | undefined; framework?: Framework | undefined; version?: string | undefined; includeInternal?: boolean | undefined }) => Promise<{ match?: CapabilityRecord | undefined; candidates: CapabilityRecord[] }>;
+  planImplementation: (input: { objective: string; capabilities: string[]; framework: Framework; installedVersions?: Record<string, string> | undefined; targetVersions?: Record<string, string> | undefined; constraints?: string[] | undefined }) => Promise<Record<string, unknown>>;
+  validateUsage: (input: { framework?: Framework | undefined; imports: Array<{ packageName: string; symbols: string[] }>; features?: string[] | undefined; configuration?: Array<{ capability: string; packageName?: string | undefined; keys: string[] }> | undefined; installedVersions?: Record<string, string> | undefined; sourceSnippet?: string | undefined }) => Promise<{ valid: boolean; diagnostics: Array<Record<string, unknown>> }>;
+  getCapability: (id: string) => Promise<CapabilityRecord | null>;
+  getPackage: (name: string) => Promise<PackageRecord | null>;
+  getExample: (id: string) => Promise<DocumentChunk | null>;
+  getSnapshot: () => Promise<CatalogSnapshot | null>;
 };

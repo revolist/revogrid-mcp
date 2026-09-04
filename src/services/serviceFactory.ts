@@ -7,6 +7,7 @@ import { PostgresContentRepository } from '../repositories/postgresContentReposi
 import { DefaultFeatureMatrixService } from './featureService.js';
 import { DefaultMigrationService } from './migrationService.js';
 import { DefaultRevogridSearchService } from './searchService.js';
+import { DefaultDeveloperCopilotService } from './developerCopilotService.js';
 import type { AppServices } from '../types/catalog.js';
 
 export async function createServices(config: AppConfig): Promise<AppServices> {
@@ -18,12 +19,14 @@ export function createServicesForRepository(contentRepository: ContentRepository
   const searchService = new DefaultRevogridSearchService(contentRepository);
   const featureService = new DefaultFeatureMatrixService(contentRepository);
   const migrationService = new DefaultMigrationService(contentRepository);
+  const developerService = new DefaultDeveloperCopilotService(contentRepository);
 
   return {
     contentRepository,
     searchService,
     featureService,
-    migrationService
+    migrationService,
+    developerService
   };
 }
 
@@ -38,7 +41,7 @@ async function createContentRepository(config: AppConfig): Promise<ContentReposi
         user: config.POSTGRES_USER,
         password: config.POSTGRES_PASSWORD
       }),
-      config.PGVECTOR_TABLE,
+      config.DOCUMENT_TABLE,
     );
   }
 

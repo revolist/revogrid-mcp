@@ -1,13 +1,47 @@
 import type {
+  CapabilityRecord,
+  CatalogSnapshot,
   DocumentChunk,
   FeatureRecord,
   MigrationNoteRecord,
   SeedDataset,
-  VersionRecord
+  VersionRecord,
+  PackageRecord
 } from '@revogrid-mcp/content-model';
 import type { Pool } from 'pg';
 
-import type { ContentRepository } from './contentRepository.js';
+import type {
+  ChunkCandidateFilters,
+  ContentRepository
+} from './contentRepository.js';
+
+type ChunkRow = {
+  id: string;
+  title: string;
+  body: string;
+  summary: string | null;
+  framework: DocumentChunk['framework'] | null;
+  surface: DocumentChunk['surface'];
+  doc_type: DocumentChunk['docType'];
+  version: string | null;
+  requires_pro: boolean;
+  symbols: string[];
+  stability: DocumentChunk['stability'] | null;
+  url: string;
+  source_path: string | null;
+  example_url: string | null;
+  package_names: string[] | null;
+  release_date: string | null;
+  product: DocumentChunk['product'] | null;
+  package_name: string | null;
+  package_version: string | null;
+  visibility: DocumentChunk['visibility'] | null;
+  symbol_kind: DocumentChunk['symbolKind'] | null;
+  source_revision: string | null;
+  signature: string | null;
+  export_path: string | null;
+  authority: number | null;
+};
 
 export class PostgresContentRepository implements ContentRepository {
   private readonly safeTableName: string;
@@ -25,43 +59,74 @@ export class PostgresContentRepository implements ContentRepository {
   }
 
   public async getChunks(): Promise<DocumentChunk[]> {
-    const result = await this.pool.query<{
-      id: string;
-      title: string;
-      body: string;
-      summary: string | null;
-      framework: DocumentChunk['framework'] | null;
-      surface: DocumentChunk['surface'];
-      doc_type: DocumentChunk['docType'];
-      version: string | null;
-      requires_pro: boolean;
-      symbols: string[];
-      stability: DocumentChunk['stability'] | null;
-      url: string;
-      source_path: string | null;
-      example_url: string | null;
-      package_names: string[] | null;
-      release_date: string | null;
-    }>(`SELECT * FROM ${this.safeTableName} ORDER BY id`);
+    const result = await this.pool.query<ChunkRow>(
+      `SELECT * FROM ${this.safeTableName} ORDER BY id`,
+    );
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      body: row.body,
-      summary: row.summary ?? undefined,
-      framework: row.framework ?? undefined,
-      surface: row.surface,
-      docType: row.doc_type,
-      version: row.version ?? undefined,
-      requiresPro: row.requires_pro,
-      symbols: row.symbols ?? [],
-      stability: row.stability ?? undefined,
-      url: row.url,
-      sourcePath: row.source_path ?? undefined,
-      exampleUrl: row.example_url ?? undefined,
-      packageNames: row.package_names ?? undefined,
-      releaseDate: row.release_date ?? undefined
-    }));
+    return result.rows.map(mapChunkRow);
+  }
+
+  public async getChunkById(id: string): Promise<DocumentChunk | null> {
+    const result = await this.pool.query<ChunkRow>(
+      `SELECT * FROM ${this.safeTableName} WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+    return result.rows[0] ? mapChunkRow(result.rows[0]) : null;
+  }
+
+  public async findLexicalCandidates(
+    query: string,
+    filters: ChunkCandidateFilters,
+    limit: number,
+  ): Promise<DocumentChunk[]> {
+    const values: unknown[] = [query];
+    const conditions = [
+      `to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || body || ' ' || array_to_string(symbols, ' ')) @@ websearch_to_tsquery('english', $1)`,
+    ];
+    const addCondition = (sql: string, value: unknown) => {
+      values.push(value);
+      conditions.push(sql.replace('?', `$${values.length}`));
+    };
+
+    addCondition('visibility = ?', filters.visibility ?? (filters.surface === 'internal' ? 'internal' : 'public'));
+    if (filters.framework) {
+      addCondition('(framework IS NULL OR framework = ?)', filters.framework);
+    }
+    if (filters.version) {
+      addCondition(
+        "regexp_replace(coalesce(version, package_version, ''), '^[vV]', '') = regexp_replace(?, '^[vV]', '')",
+        filters.version,
+      );
+    }
+    if (filters.surface) addCondition('surface = ?', filters.surface);
+    if (filters.requiresPro !== undefined) {
+      addCondition('requires_pro = ?', filters.requiresPro);
+    }
+    if (filters.docTypes?.length) {
+      addCondition('doc_type = ANY(?::text[])', filters.docTypes);
+    }
+    if (filters.product) addCondition('product = ?', filters.product);
+    if (filters.packageName) {
+      addCondition('(package_name = ? OR ? = ANY(package_names))', filters.packageName);
+      values.push(filters.packageName);
+      conditions[conditions.length - 1] = conditions.at(-1)!.replace('?', `$${values.length}`);
+    }
+    if (filters.symbolKind) addCondition('symbol_kind = ?', filters.symbolKind);
+
+    values.push(Math.max(1, limit));
+    const result = await this.pool.query<ChunkRow>(
+      `SELECT *
+       FROM ${this.safeTableName}
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY ts_rank_cd(
+         to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || body || ' ' || array_to_string(symbols, ' ')),
+         websearch_to_tsquery('english', $1)
+       ) DESC, authority DESC, id
+       LIMIT $${values.length}`,
+      values,
+    );
+
+    return result.rows.map(mapChunkRow);
   }
 
   public async getVersions(): Promise<VersionRecord[]> {
@@ -137,6 +202,51 @@ export class PostgresContentRepository implements ContentRepository {
       recommendedExampleIds: row.recommended_example_ids ?? []
     }));
   }
+
+  public async getPackages(): Promise<PackageRecord[]> {
+    const result = await this.pool.query<{ payload: PackageRecord }>('SELECT payload FROM catalog_packages ORDER BY id');
+    return result.rows.map((row) => row.payload);
+  }
+
+  public async getCapabilities(): Promise<CapabilityRecord[]> {
+    const result = await this.pool.query<{ payload: CapabilityRecord }>('SELECT payload FROM catalog_capabilities ORDER BY id');
+    return result.rows.map((row) => row.payload);
+  }
+
+  public async getSnapshot(): Promise<CatalogSnapshot | null> {
+    const result = await this.pool.query<{ payload: CatalogSnapshot }>('SELECT payload FROM catalog_snapshot WHERE id = 1');
+    return result.rows[0]?.payload ?? null;
+  }
+}
+
+function mapChunkRow(row: ChunkRow): DocumentChunk {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    summary: row.summary ?? undefined,
+    framework: row.framework ?? undefined,
+    surface: row.surface,
+    docType: row.doc_type,
+    version: row.version ?? undefined,
+    requiresPro: row.requires_pro,
+    symbols: row.symbols ?? [],
+    stability: row.stability ?? undefined,
+    url: row.url,
+    sourcePath: row.source_path ?? undefined,
+    exampleUrl: row.example_url ?? undefined,
+    packageNames: row.package_names ?? undefined,
+    releaseDate: row.release_date ?? undefined,
+    product: row.product ?? undefined,
+    packageName: row.package_name ?? undefined,
+    packageVersion: row.package_version ?? undefined,
+    visibility: row.visibility ?? 'public',
+    symbolKind: row.symbol_kind ?? undefined,
+    sourceRevision: row.source_revision ?? undefined,
+    signature: row.signature ?? undefined,
+    exportPath: row.export_path ?? undefined,
+    authority: row.authority ?? 50
+  };
 }
 
 function assertSafeIdentifier(identifier: string): string {

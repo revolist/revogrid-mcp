@@ -20,7 +20,15 @@ export function formatSearchResult(match: SearchMatch): SearchResultItem {
     snippet: match.chunk.body.slice(0, 220),
     url: match.chunk.url,
     exampleUrl: match.chunk.exampleUrl,
-    whyMatched: match.whyMatched
+    whyMatched: match.whyMatched,
+    product: match.chunk.product,
+    packageName: match.chunk.packageName,
+    packageVersion: match.chunk.packageVersion,
+    visibility: match.chunk.visibility,
+    symbolKind: match.chunk.symbolKind,
+    sourcePath: match.chunk.sourcePath,
+    sourceRevision: match.chunk.sourceRevision,
+    authority: match.chunk.authority
   };
 }
 
@@ -33,7 +41,7 @@ export function formatExampleResult(match: SearchMatch): ExampleResultItem {
     surface: match.chunk.surface,
     requiresPro: match.chunk.requiresPro,
     summary: match.chunk.summary ?? match.chunk.body.slice(0, 160),
-    packages: match.chunk.packageNames ?? [],
+    packages: match.chunk.packageNames ?? (match.chunk.packageName ? [match.chunk.packageName] : []),
     sourceUrl: match.chunk.sourcePath ? `repo://${match.chunk.sourcePath}` : undefined,
     exampleUrl: match.chunk.exampleUrl,
     score: Number(match.score.toFixed(3))

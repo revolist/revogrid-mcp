@@ -1,8 +1,6 @@
 import type { SeedDataset } from '@revogrid-mcp/content-model';
 import type { Pool, PoolClient } from 'pg';
-import pgvector from 'pgvector/pg';
 
-import { embedChunks } from '../embeddings/embedChunks.js';
 import { createContentFingerprint } from '../pipelines/buildCatalog.js';
 
 export async function saveCatalogDataset(
@@ -16,10 +14,6 @@ export async function saveCatalogDataset(
   try {
     await client.query('BEGIN');
     await ensureSchema(client, safeTableName);
-    await pgvector.registerTypes(client);
-
-    const embeddings = embedChunks(dataset.chunks);
-    const embeddingMap = new Map(embeddings.map((embedding) => [embedding.chunkId, embedding.vector]));
 
     for (const chunk of dataset.chunks) {
       await client.query(
@@ -27,12 +21,13 @@ export async function saveCatalogDataset(
           INSERT INTO ${safeTableName} (
             id, title, body, summary, framework, surface, doc_type, version, requires_pro,
             symbols, stability, url, source_path, example_url, package_names, release_date,
-            content_hash, embedding
+            content_hash, product, package_name, package_version, visibility,
+            symbol_kind, source_revision, signature, export_path, authority
           )
           VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9,
             $10, $11, $12, $13, $14, $15, $16,
-            $17, $18
+            $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
           )
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
@@ -51,7 +46,15 @@ export async function saveCatalogDataset(
             package_names = EXCLUDED.package_names,
             release_date = EXCLUDED.release_date,
             content_hash = EXCLUDED.content_hash,
-            embedding = EXCLUDED.embedding
+            product = EXCLUDED.product,
+            package_name = EXCLUDED.package_name,
+            package_version = EXCLUDED.package_version,
+            visibility = EXCLUDED.visibility,
+            symbol_kind = EXCLUDED.symbol_kind,
+            source_revision = EXCLUDED.source_revision,
+            signature = EXCLUDED.signature,
+            export_path = EXCLUDED.export_path,
+            authority = EXCLUDED.authority
         `,
         [
           chunk.id,
@@ -71,7 +74,15 @@ export async function saveCatalogDataset(
           chunk.packageNames ?? null,
           chunk.releaseDate ?? null,
           createContentFingerprint(chunk),
-          pgvector.toSql(embeddingMap.get(chunk.id) ?? [])
+          chunk.product ?? null,
+          chunk.packageName ?? null,
+          chunk.packageVersion ?? null,
+          chunk.visibility,
+          chunk.symbolKind ?? null,
+          chunk.sourceRevision ?? null,
+          chunk.signature ?? null,
+          chunk.exportPath ?? null,
+          chunk.authority
         ],
       );
     }
@@ -160,6 +171,30 @@ export async function saveCatalogDataset(
       );
     }
 
+    for (const packageRecord of dataset.packages ?? []) {
+      await client.query(
+        `INSERT INTO catalog_packages (id, payload) VALUES ($1, $2::jsonb)
+         ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload`,
+        [packageRecord.name, JSON.stringify(packageRecord)],
+      );
+    }
+
+    for (const capability of dataset.capabilities ?? []) {
+      await client.query(
+        `INSERT INTO catalog_capabilities (id, payload) VALUES ($1, $2::jsonb)
+         ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload`,
+        [capability.id, JSON.stringify(capability)],
+      );
+    }
+
+    if (dataset.snapshot) {
+      await client.query(
+        `INSERT INTO catalog_snapshot (id, payload) VALUES (1, $1::jsonb)
+         ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload`,
+        [JSON.stringify(dataset.snapshot)],
+      );
+    }
+
     await deleteStaleRows(client, safeTableName, 'id', dataset.chunks.map((chunk) => chunk.id));
     await deleteStaleRows(client, 'catalog_versions', 'version', dataset.versions.map((version) => version.version));
     await deleteStaleRows(
@@ -169,6 +204,8 @@ export async function saveCatalogDataset(
       dataset.features.map((feature) => feature.featureName),
     );
     await deleteStaleRows(client, 'catalog_migrations', 'id', dataset.migrations.map((migration) => migration.id));
+    await deleteStaleRows(client, 'catalog_packages', 'id', (dataset.packages ?? []).map((item) => item.name));
+    await deleteStaleRows(client, 'catalog_capabilities', 'id', (dataset.capabilities ?? []).map((item) => item.id));
 
     await client.query('COMMIT');
   } catch (error) {
@@ -180,7 +217,6 @@ export async function saveCatalogDataset(
 }
 
 async function ensureSchema(client: PoolClient, tableName: string): Promise<void> {
-  await client.query('CREATE EXTENSION IF NOT EXISTS vector');
   await client.query(`
     CREATE TABLE IF NOT EXISTS ${tableName} (
       id text PRIMARY KEY,
@@ -200,9 +236,26 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
       package_names text[],
       release_date text,
       content_hash text NOT NULL,
-      embedding vector(16)
+      product text,
+      package_name text,
+      package_version text,
+      visibility text NOT NULL DEFAULT 'public',
+      symbol_kind text,
+      source_revision text,
+      signature text,
+      export_path text,
+      authority integer NOT NULL DEFAULT 50
     )
   `);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS product text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS package_name text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS package_version text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public'`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS symbol_kind text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS source_revision text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS signature text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS export_path text`);
+  await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS authority integer NOT NULL DEFAULT 50`);
   await client.query(
     `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_surface_idx`)} ON ${tableName} (surface)`,
   );
@@ -211,6 +264,10 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
   );
   await client.query(
     `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_requires_pro_idx`)} ON ${tableName} (requires_pro)`,
+  );
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS ${assertSafeIdentifier(`${tableName}_fulltext_v2_idx`)} ON ${tableName}
+     USING GIN (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || body || ' ' || array_to_string(symbols, ' ')))`,
   );
   await client.query(`
     CREATE TABLE IF NOT EXISTS catalog_versions (
@@ -249,6 +306,10 @@ async function ensureSchema(client: PoolClient, tableName: string): Promise<void
       recommended_example_ids text[] NOT NULL DEFAULT '{}'
     )
   `);
+  await client.query('CREATE TABLE IF NOT EXISTS catalog_packages (id text PRIMARY KEY, payload jsonb NOT NULL)');
+  await client.query('CREATE TABLE IF NOT EXISTS catalog_capabilities (id text PRIMARY KEY, payload jsonb NOT NULL)');
+  await client.query('CREATE INDEX IF NOT EXISTS catalog_capabilities_package_idx ON catalog_capabilities ((payload->>\'packageName\'))');
+  await client.query('CREATE TABLE IF NOT EXISTS catalog_snapshot (id integer PRIMARY KEY CHECK (id = 1), payload jsonb NOT NULL)');
 }
 
 async function deleteStaleRows(

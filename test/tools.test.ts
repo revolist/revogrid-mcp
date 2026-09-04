@@ -13,6 +13,7 @@ import { InMemoryContentRepository } from '../src/repositories/inMemoryContentRe
 import { DefaultFeatureMatrixService } from '../src/services/featureService.js';
 import { DefaultMigrationService } from '../src/services/migrationService.js';
 import { DefaultRevogridSearchService } from '../src/services/searchService.js';
+import { DefaultDeveloperCopilotService } from '../src/services/developerCopilotService.js';
 
 function createTestServices(dataset: SeedDataset = buildSeedDataset()) {
   const repository = new InMemoryContentRepository(dataset);
@@ -22,7 +23,8 @@ function createTestServices(dataset: SeedDataset = buildSeedDataset()) {
     contentRepository: repository,
     searchService,
     featureService: new DefaultFeatureMatrixService(repository),
-    migrationService: new DefaultMigrationService(repository)
+    migrationService: new DefaultMigrationService(repository),
+    developerService: new DefaultDeveloperCopilotService(repository)
   };
 }
 
@@ -187,7 +189,7 @@ describe('MCP tool handlers', () => {
     expect(result.bestExamples[0]?.id).toBe('example-pivot-demo');
   });
 
-  it('returns indexed internal feature artifacts without an entitlement context', async () => {
+  it('does not recommend internal feature artifacts through the public feature workflow', async () => {
     const services = createTestServices({
       chunks: [
         {
@@ -230,7 +232,7 @@ describe('MCP tool handlers', () => {
 
     expect(result.supported).toBe(true);
     expect(result.requiresPro).toBe(true);
-    expect(result.bestDocs[0]?.id).toBe('revogrid-src-internal-audit');
+    expect(result.bestDocs).toEqual([]);
     expect(result.bestExamples).toEqual([]);
   });
 

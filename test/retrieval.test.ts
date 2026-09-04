@@ -2,10 +2,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { SeedDataset } from '@revogrid-mcp/content-model';
 import type { DocumentChunk } from '@revogrid-mcp/content-model';
-import { buildCatalogDataset, buildSeedDataset } from '@revogrid-mcp/ingestion';
+import { buildCatalogDataset, buildSeedDataset, validateCatalogDataset } from '@revogrid-mcp/ingestion';
 
 import { hybridSearch } from '../src/retrieval/hybridSearch.js';
 import { InMemoryContentRepository } from '../src/repositories/inMemoryContentRepository.js';
+import { DefaultDeveloperCopilotService } from '../src/services/developerCopilotService.js';
 import { DefaultRevogridSearchService } from '../src/services/searchService.js';
 
 describe('retrieval filters', () => {
@@ -102,7 +103,7 @@ describe('retrieval quality', () => {
 
   it.each([
     ['custom editor react', 'revogrid-docs-guide-react-editor'],
-    ['beforeedit event', 'revogrid-pro-packages-pro-plugins-event-manager-edit-interception'],
+    ['beforeedit event', 'revogrid-pro-apps-portal-src-content-docs-api-event-manager'],
     ['column grouping', 'revogrid-docs-guide-column-grouping'],
     ['row grouping', 'revogrid-docs-guide-row-grouping'],
     ['pivot dimensions', 'revogrid-pro-apps-portal-src-content-docs-guides-pivot-concepts-dimensions'],
@@ -129,28 +130,55 @@ describe('retrieval quality', () => {
     expect(results[0]?.chunk.docType).toBe('guide');
   });
 
-  it('exposes every indexed Pro plugin as a canonical feature', () => {
-    const indexedPluginSlugs = new Set(
-      dataset.chunks
-        .map((chunk) => chunk.sourcePath?.match(
-          /^revogrid-pro\/packages\/(?:pro|enterprise)\/plugins\/([^/]+)\//,
-        )?.[1])
-        .filter((slug): slug is string => Boolean(slug))
-    );
-    const canonicalFeatureNames = new Set(
-      dataset.features.map((feature) => feature.featureName.toLowerCase())
-    );
-    const missingFeatures = [...indexedPluginSlugs]
-      .map((slug) => slug.replace(/[-_]+/g, ' '))
-      .filter((featureName) => !canonicalFeatureNames.has(featureName));
-    const scheduler = dataset.features.find(
-      (feature) => feature.featureName.toLowerCase() === 'event scheduler'
-    );
+  it('covers every published Core and Pro-family package with public capabilities', () => {
+    const packages = dataset.packages ?? [];
+    const capabilities = dataset.capabilities ?? [];
+    const packageNames = packages.map((item) => item.name);
 
-    expect(indexedPluginSlugs).toContain('kanban');
-    expect(indexedPluginSlugs).toContain('event-scheduler');
-    expect(missingFeatures).toEqual([]);
-    expect(scheduler?.aliases).toContain('scheduler');
+    expect(packageNames).toEqual(expect.arrayContaining([
+      '@revolist/revogrid',
+      '@revolist/revogrid-pro',
+      '@revolist/pivot',
+      '@revolist/gantt',
+      '@revolist/scheduler',
+      '@revolist/kanban',
+      '@revolist/revogrid-collaborative-editing',
+      '@revolist/revogrid-enterprise'
+    ]));
+    for (const packageName of packageNames) {
+      expect(capabilities.some((item) => item.packageName === packageName && item.visibility === 'public')).toBe(true);
+    }
+    expect(packages.every((item) => item.exportEntrypoints.length > 0)).toBe(true);
+    expect(packages.find((item) => item.name === '@revolist/revogrid')?.exportEntrypoints).toEqual(
+      expect.arrayContaining(['.', './loader', './standalone']),
+    );
+    expect(capabilities.find((item) => item.name === 'scheduler')?.requiresPro).toBe(true);
+    expect(() => validateCatalogDataset(dataset)).not.toThrow();
+  });
+
+  it('resolves an exact public export to its direct package owner', async () => {
+    const service = new DefaultDeveloperCopilotService(new InMemoryContentRepository(dataset));
+    const result = await service.inspectApi('PivotPlugin', {});
+
+    expect(result.match).toMatchObject({
+      name: 'PivotPlugin',
+      packageName: '@revolist/pivot',
+      visibility: 'public'
+    });
+  });
+
+  it('keeps portal guides public and returns registered demos as examples', () => {
+    const portalGuides = dataset.chunks.filter((chunk) =>
+      chunk.sourcePath?.startsWith('revogrid-pro/apps/portal/src/content/docs/guides/'),
+    );
+    const examples = hybridSearch('pivot', dataset.chunks, {
+      docTypes: ['example', 'live-demo'],
+      limit: 20
+    });
+
+    expect(portalGuides.length).toBeGreaterThan(0);
+    expect(portalGuides.every((chunk) => chunk.visibility === 'public')).toBe(true);
+    expect(examples.some((result) => result.chunk.sourcePath?.includes('/content/demo/'))).toBe(true);
   });
 
   it('indexes token-free MCP setup guidance', () => {
@@ -174,4 +202,21 @@ describe('retrieval quality', () => {
       expect(results.some((result) => result.chunk.url.includes('pro.rv-grid.com'))).toBe(true);
     },
   );
+
+  it.each([
+    ['editing beforeedit event', 'core'],
+    ['server side data source', 'core'],
+    ['row grouping', 'core'],
+    ['pivot dimensions', 'pivot'],
+    ['gantt dependencies', 'gantt'],
+    ['event scheduler resources', 'scheduler'],
+    ['kanban cards', 'kanban'],
+    ['collaborative editing', 'collaboration'],
+    ['excel export', 'core'],
+    ['accessibility keyboard', 'core']
+  ])('returns %s evidence for the %s product within the top three', (query, product) => {
+    const results = hybridSearch(query, dataset.chunks, { limit: 3 });
+    expect(results.some((result) => result.chunk.product === product)).toBe(true);
+    expect(results.every((result) => result.chunk.visibility !== 'internal')).toBe(true);
+  });
 });

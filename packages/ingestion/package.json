@@ -13,8 +13,8 @@
     "@revogrid-mcp/content-model": "workspace:*",
     "@revogrid-mcp/shared": "workspace:*",
     "pg": "^8.13.3",
-    "pgvector": "^0.2.1",
-    "zod": "^3.24.2"
+    "typescript": "^6.0.3",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/pg": "^8.11.11"

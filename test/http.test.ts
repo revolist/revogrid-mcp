@@ -83,6 +83,16 @@ describe('http integration', () => {
     });
   });
 
+  it('reports catalog snapshot readiness', async () => {
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: 'ready',
+      service: 'revogrid-mcp',
+      snapshot: { schemaVersion: 2, packageCount: 8 }
+    });
+  });
+
   it('reports mcp request statistics on /stats', async () => {
     await app.inject({
       method: 'POST',
@@ -138,9 +148,63 @@ describe('http integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    const body = response.json();
+    expect(body).toMatchObject({
       jsonrpc: '2.0',
       id: 1
+    });
+  });
+
+  it.each([
+    ['/', '2025-11-25'],
+    ['/pro', '2024-11-05']
+  ])('negotiates supported protocol %s on %s', async (url, protocolVersion) => {
+    const response = await app.inject({
+      method: 'POST',
+      url,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: {
+        ...initializePayload,
+        id: `initialize-${url}-${protocolVersion}`,
+        params: { ...initializePayload.params, protocolVersion }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      result: { protocolVersion }
+    });
+  });
+
+  it('serves the modern 2026 protocol on the same endpoint', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': '2026-07-28',
+        'mcp-method': 'server/discover'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 'discover-modern',
+        method: 'server/discover',
+        params: {
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {}
+          }
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      result: { supportedVersions: expect.arrayContaining(['2026-07-28']) }
     });
   });
 
@@ -175,7 +239,8 @@ describe('http integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    const body = response.json();
+    expect(body).toMatchObject({
       jsonrpc: '2.0',
       id: `tools-${url}`,
       result: {
@@ -183,10 +248,30 @@ describe('http integration', () => {
           expect.objectContaining({ name: 'search_revogrid_docs' }),
           expect.objectContaining({ name: 'find_examples' }),
           expect.objectContaining({ name: 'resolve_feature_matrix' }),
-          expect.objectContaining({ name: 'get_migration_notes' })
+          expect.objectContaining({ name: 'get_migration_notes' }),
+          expect.objectContaining({
+            name: 'list_revogrid_capabilities',
+            outputSchema: expect.any(Object),
+            annotations: expect.objectContaining({ readOnlyHint: true, destructiveHint: false })
+          }),
+          expect.objectContaining({ name: 'inspect_revogrid_api' }),
+          expect.objectContaining({ name: 'plan_revogrid_implementation' }),
+          expect.objectContaining({ name: 'validate_revogrid_usage' })
         ])
       }
     });
+    expect(body.result.tools).toHaveLength(8);
+    expect(body.result.tools.every((tool: { annotations?: Record<string, boolean> }) =>
+      tool.annotations?.readOnlyHint === true &&
+      tool.annotations?.destructiveHint === false &&
+      tool.annotations?.openWorldHint === false,
+    )).toBe(true);
+    expect(body.result.tools.find((tool: { name: string }) => tool.name === 'search_revogrid_docs'))
+      .toMatchObject({
+        inputSchema: {
+          properties: { query: { description: expect.any(String) } }
+        }
+      });
   });
 
   it('serves catalog resources from the unified endpoint', async () => {
@@ -210,6 +295,84 @@ describe('http integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('requiresProChunkCount');
     expect(response.body).toContain('revogrid-pro');
+  });
+
+  it('advertises developer catalog resource templates', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': '2025-11-25'
+      },
+      payload: { jsonrpc: '2.0', id: 21, method: 'resources/templates/list', params: {} }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('revogrid://capabilities/{id}');
+    expect(response.body).toContain('revogrid://symbols/{qualifiedName}');
+    expect(response.body).toContain('revogrid://packages/{packageName}');
+    expect(response.body).toContain('revogrid://examples/{id}');
+  });
+
+  it('returns validated structured capability results with resource links', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 23,
+        method: 'tools/call',
+        params: {
+          name: 'list_revogrid_capabilities',
+          arguments: { product: 'pivot', limit: 1 }
+        }
+      }
+    });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.result.structuredContent.results).toHaveLength(1);
+    expect(body.result.structuredContent.results[0]).not.toHaveProperty('evidence');
+    expect(body.result.content[0].text).toMatch(/^list_revogrid_capabilities: 1 result/);
+    expect(body.result.content[0].text).not.toContain('"results"');
+    expect(body.result.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'resource_link', uri: expect.stringContaining('revogrid://capabilities/') })
+    ]));
+  });
+
+  it('returns an actionable tool error for an invalid pagination cursor', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 24,
+        method: 'tools/call',
+        params: {
+          name: 'search_revogrid_docs',
+          arguments: { query: 'pivot', cursor: 'invalid' }
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      result: {
+        isError: true,
+        content: [expect.objectContaining({
+          text: expect.stringContaining('Retry without cursor')
+        })]
+      }
+    });
   });
 
   it('returns labeled Pro docs from the canonical root endpoint without a token', async () => {

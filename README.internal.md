@@ -13,6 +13,8 @@ The server exposes:
 
 Clients should use `http://localhost:8787/`. `requiresPro` remains descriptive
 metadata for package and license guidance; it is not an MCP access-control flag.
+The shared endpoint serves the modern 2026 MCP request envelope and retains
+stateless JSON compatibility for supported 2025-era clients.
 
 ## Re-index webhook and webhook tokens
 
@@ -86,7 +88,7 @@ pnpm sources:update -- --remote
 - `POSTGRES_DB` (example: `revogrid_mcp`)
 - `POSTGRES_USER` (example: `postgres`)
 - `POSTGRES_PASSWORD` (example: `postgres`)
-- `PGVECTOR_TABLE` (default `document_chunks`)
+- `DOCUMENT_TABLE` (default `document_chunks`; legacy `PGVECTOR_TABLE` remains accepted)
 - `REINDEX_OUTPUT` (default `data/catalog.json`)
 
 ### Auth and security
