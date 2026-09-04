@@ -50,6 +50,17 @@ const dataset: SeedDataset = {
     exportEntrypoints: ['.', './styles.css'],
     dependencies: ['@revolist/revogrid-pro'],
     peerDependencies: []
+  }, {
+    name: '@revolist/react-datagrid',
+    version: '4.27.6',
+    product: 'core',
+    framework: 'react',
+    tier: 'core',
+    requiresPro: false,
+    entrypoint: 'revogrid/packages/react/lib/index.ts',
+    exportEntrypoints: ['.'],
+    dependencies: ['@revolist/revogrid'],
+    peerDependencies: []
   }],
   capabilities: [{
     id: '@revolist/pivot:pivotplugin',
@@ -77,6 +88,35 @@ const dataset: SeedDataset = {
       repository: 'revogrid-pro',
       sourcePath: 'revogrid-pro/packages/pivot/src/pivot/index.ts',
       url: 'https://pro.rv-grid.com/api/pivot',
+      authority: 100
+    }],
+    relatedExampleIds: []
+  }, {
+    id: '@revolist/react-datagrid:revogrid',
+    name: 'RevoGrid',
+    aliases: ['revo grid'],
+    product: 'core',
+    packageName: '@revolist/react-datagrid',
+    packageVersion: '4.27.6',
+    tier: 'core',
+    requiresPro: false,
+    visibility: 'public',
+    stability: 'stable',
+    frameworks: ['react'],
+    symbolKind: 'component',
+    exportPath: '@revolist/react-datagrid',
+    configuration: [],
+    configurationKeys: [],
+    methods: [],
+    events: [],
+    dependencies: ['@revolist/revogrid'],
+    peerDependencies: [],
+    relations: [],
+    evidence: [{
+      chunkId: 'react-wrapper',
+      repository: 'revogrid',
+      sourcePath: 'revogrid/packages/react/lib/index.ts',
+      url: 'https://rv-grid.com/guide/react',
       authority: 100
     }],
     relatedExampleIds: []
@@ -113,11 +153,48 @@ describe('developer copilot service', () => {
       imports: [{ packageName: '@revolist/pivot', symbols: ['MissingPlugin'] }]
     });
 
-    expect(plan.imports).toEqual([
+    expect(plan.imports).toEqual(expect.arrayContaining([
       { packageName: '@revolist/pivot', symbol: 'PivotPlugin', importPath: '@revolist/pivot' }
-    ]);
+    ]));
     expect(validation.valid).toBe(false);
     expect(validation.diagnostics[0]).toMatchObject({ code: 'invalid-import', severity: 'error' });
+  });
+
+  it('plans and validates a documented React Pivot setup without explicit capabilities', async () => {
+    const inspected = await service.inspectApi('PivotPlugin', {
+      packageName: '@revolist/pivot',
+      framework: 'react'
+    });
+    const plan = await service.planImplementation({
+      objective: 'Build a React pivot table',
+      capabilities: [],
+      framework: 'react'
+    });
+    const validation = await service.validateUsage({
+      framework: 'react',
+      imports: [
+        { packageName: '@revolist/react-datagrid', symbols: ['RevoGrid'] },
+        { packageName: '@revolist/pivot', symbols: ['PivotPlugin'] }
+      ],
+      features: ['pivot']
+    });
+
+    expect(inspected.match).toMatchObject({
+      name: 'PivotPlugin',
+      packageName: '@revolist/pivot',
+      stability: 'stable'
+    });
+    expect(plan.imports).toEqual(expect.arrayContaining([
+      { packageName: '@revolist/react-datagrid', symbol: 'RevoGrid', importPath: '@revolist/react-datagrid' },
+      { packageName: '@revolist/pivot', symbol: 'PivotPlugin', importPath: '@revolist/pivot' }
+    ]));
+    expect(plan.unresolved).toEqual([]);
+    expect(validation.valid).toBe(true);
+    expect(validation.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'unknown-package' }),
+      expect.objectContaining({ code: 'framework-incompatible' }),
+      expect.objectContaining({ code: 'deprecated-api' })
+    ]));
   });
 
   it('keeps internals opt-in and validates configuration, dependencies, and Pro metadata', async () => {

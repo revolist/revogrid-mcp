@@ -151,19 +151,28 @@ export class DefaultDeveloperCopilotService implements DeveloperCopilotService {
     constraints?: string[] | undefined;
   }) {
     const index = await this.getCatalogIndex();
-    const requested = unique(input.capabilities);
+    const requested = input.capabilities.length > 0
+      ? unique(input.capabilities)
+      : inferCapabilitiesFromObjective(input.objective, index);
     const resolved: CapabilityRecord[] = [];
     const unresolved: string[] = [];
     for (const name of requested) {
       const candidates = this.resolveFromIndex(name, { framework: input.framework }, index);
-      const match = selectPreferredMatch(name, candidates);
+      const match = selectImplementationCapability(name, candidates, index);
       if (match) resolved.push(match);
       else unresolved.push(name);
     }
-    const packages = unique(resolved.map((item) => item.packageName));
+    const frameworkHost = resolved.length > 0
+      ? findFrameworkHostCapability(index, input.framework)
+      : undefined;
+    if (frameworkHost && !resolved.some((item) => item.id === frameworkHost.id)) {
+      resolved.unshift(frameworkHost);
+    }
+    const plannedCapabilities = uniqueCapabilities(resolved);
+    const packages = unique(plannedCapabilities.map((item) => item.packageName));
     const warnings = unique([
-      ...versionWarnings(resolved, input.installedVersions ?? {}),
-      ...targetVersionWarnings(resolved, input.targetVersions ?? {})
+      ...versionWarnings(plannedCapabilities, input.installedVersions ?? {}),
+      ...targetVersionWarnings(plannedCapabilities, input.targetVersions ?? {})
     ]);
 
     return {
@@ -171,21 +180,21 @@ export class DefaultDeveloperCopilotService implements DeveloperCopilotService {
       framework: input.framework,
       packages: packages.map((packageName) => ({
         packageName,
-        version: input.targetVersions?.[packageName] ?? resolved.find((item) => item.packageName === packageName)?.packageVersion,
-        requiresPro: resolved.some((item) => item.packageName === packageName && item.requiresPro)
+        version: input.targetVersions?.[packageName] ?? plannedCapabilities.find((item) => item.packageName === packageName)?.packageVersion,
+        requiresPro: plannedCapabilities.some((item) => item.packageName === packageName && item.requiresPro)
       })),
-      imports: resolved.map((item) => ({
+      imports: plannedCapabilities.map((item) => ({
         packageName: item.packageName,
         symbol: item.name,
         importPath: item.exportPath ?? item.packageName
       })),
-      pluginOrder: orderCapabilities(resolved),
-      configuration: unique(resolved.flatMap((item) => item.configuration)),
-      lifecycle: buildLifecycle(resolved),
-      dataFlow: buildDataFlow(resolved),
-      events: unique(resolved.flatMap((item) => item.events)),
-      methods: unique(resolved.flatMap((item) => item.methods)),
-      evidence: resolved.flatMap((item) => item.evidence).slice(0, 30),
+      pluginOrder: orderCapabilities(plannedCapabilities),
+      configuration: unique(plannedCapabilities.flatMap((item) => item.configuration)),
+      lifecycle: buildLifecycle(plannedCapabilities),
+      dataFlow: buildDataFlow(plannedCapabilities),
+      events: unique(plannedCapabilities.flatMap((item) => item.events)),
+      methods: unique(plannedCapabilities.flatMap((item) => item.methods)),
+      evidence: plannedCapabilities.flatMap((item) => item.evidence).slice(0, 30),
       constraints: input.constraints ?? [],
       warnings,
       unresolved
@@ -423,6 +432,57 @@ function selectPreferredMatch(query: string, capabilities: CapabilityRecord[]): 
   const directOwners = capabilities.filter((item) => item.product !== 'enterprise');
   if (directOwners.length === 1) return directOwners[0];
   return capabilities.length === 1 ? capabilities[0] : undefined;
+}
+
+function inferCapabilitiesFromObjective(objective: string, index: CatalogIndex): string[] {
+  const normalizedObjective = normalizeText(objective);
+  const products = unique(index.packages.map((item) => item.product))
+    .filter((product) => !['core', 'pro', 'enterprise'].includes(normalizeText(product)))
+    .filter((product) => containsCatalogTerm(normalizedObjective, normalizeText(product)));
+  return products;
+}
+
+function containsCatalogTerm(text: string, term: string): boolean {
+  if (!term) return false;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|\\s)${escaped}(?=\\s|$)`).test(text);
+}
+
+function selectImplementationCapability(
+  query: string,
+  capabilities: CapabilityRecord[],
+  index: CatalogIndex,
+): CapabilityRecord | undefined {
+  const selected = selectPreferredMatch(query, capabilities);
+  if (!selected || !selected.id.startsWith('package:')) return selected;
+
+  const product = normalizeText(selected.product);
+  const packageExports = index.publicCapabilities.filter((item) =>
+    item.packageName === selected.packageName && !item.id.startsWith('package:'),
+  );
+  return packageExports.find((item) =>
+    unique([item.name, ...item.aliases]).some((name) => normalizeText(name) === `${product} plugin`),
+  )
+    ?? packageExports.find((item) => normalizeText(item.name).includes(product))
+    ?? (packageExports.length === 1 ? packageExports[0] : undefined);
+}
+
+function findFrameworkHostCapability(index: CatalogIndex, framework: Framework): CapabilityRecord | undefined {
+  if (framework === 'vanilla') return undefined;
+  const packageRecord = index.packages.find((item) => item.framework === framework);
+  if (!packageRecord) return undefined;
+  return index.publicCapabilities.find((item) =>
+    item.packageName === packageRecord.name && item.name === 'RevoGrid',
+  );
+}
+
+function uniqueCapabilities(capabilities: CapabilityRecord[]): CapabilityRecord[] {
+  const seen = new Set<string>();
+  return capabilities.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 function compareCapabilities(left: CapabilityRecord, right: CapabilityRecord): number {

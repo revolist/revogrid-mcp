@@ -89,7 +89,7 @@ describe('http integration', () => {
     expect(response.json()).toMatchObject({
       status: 'ready',
       service: 'revogrid-mcp',
-      snapshot: { schemaVersion: 2, packageCount: 8 }
+      snapshot: { schemaVersion: 2, packageCount: 12 }
     });
   });
 
@@ -343,6 +343,48 @@ describe('http integration', () => {
     expect(body.result.content).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'resource_link', uri: expect.stringContaining('revogrid://capabilities/') })
     ]));
+  });
+
+  it.each(['/', '/pro'])('supports the documented React Pivot workflow through every developer tool on %s', async (url) => {
+    const headers = {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream'
+    };
+    const calls = [
+      ['list_revogrid_capabilities', { product: 'pivot', framework: 'react', limit: 50 }],
+      ['inspect_revogrid_api', { query: 'PivotPlugin', packageName: '@revolist/pivot', framework: 'react' }],
+      ['plan_revogrid_implementation', { objective: 'Build a React pivot table', framework: 'react' }],
+      ['validate_revogrid_usage', {
+        framework: 'react',
+        imports: [
+          { packageName: '@revolist/react-datagrid', symbols: ['RevoGrid'] },
+          { packageName: '@revolist/pivot', symbols: ['PivotPlugin'] }
+        ],
+        features: ['pivot']
+      }]
+    ] as const;
+
+    const results = await Promise.all(calls.map(async ([name, arguments_], index) => {
+      const response = await app.inject({
+        method: 'POST',
+        url,
+        headers,
+        payload: { jsonrpc: '2.0', id: `react-pivot-${url}-${index}`, method: 'tools/call', params: { name, arguments: arguments_ } }
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json().result.structuredContent;
+    }));
+
+    expect(results[0].results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ packageName: '@revolist/pivot', stability: 'stable' })
+    ]));
+    expect(results[1].match).toMatchObject({ name: 'PivotPlugin', packageName: '@revolist/pivot', stability: 'stable' });
+    expect(results[2]).toMatchObject({ unresolved: [] });
+    expect(results[2].imports).toEqual(expect.arrayContaining([
+      expect.objectContaining({ packageName: '@revolist/react-datagrid', symbol: 'RevoGrid' }),
+      expect.objectContaining({ packageName: '@revolist/pivot', symbol: 'PivotPlugin' })
+    ]));
+    expect(results[3]).toMatchObject({ valid: true });
   });
 
   it('returns an actionable tool error for an invalid pagination cursor', async () => {

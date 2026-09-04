@@ -784,12 +784,8 @@ function deriveCapabilities(
       tier: packageRecord.tier,
       requiresPro: packageRecord.requiresPro,
       visibility: 'public',
-      stability: related.some((chunk) => chunk.stability === 'deprecated') ? 'deprecated' : 'stable',
-      frameworks: unique(
-        related.map((chunk) => chunk.framework).filter((value): value is NonNullable<typeof value> => Boolean(value)),
-      ).length > 0
-        ? unique(related.map((chunk) => chunk.framework).filter((value): value is NonNullable<typeof value> => Boolean(value)))
-        : ['vanilla'],
+      stability: publicExport.deprecated ? 'deprecated' : 'stable',
+      frameworks: resolveCapabilityFrameworks(packageRecord),
       symbolKind: publicExport.symbolKind,
       exportPath: publicExport.exportPath,
       signature: publicExport.signature,
@@ -852,7 +848,9 @@ function deriveCapabilities(
       requiresPro: packageRecord.requiresPro,
       visibility: 'public',
       stability: 'stable',
-      frameworks: ['react', 'vue', 'angular', 'svelte', 'vanilla'],
+      frameworks: packageRecord.framework
+        ? [packageRecord.framework]
+        : ['react', 'vue', 'angular', 'svelte', 'vanilla'],
       symbolKind: 'plugin',
       exportPath: packageRecord.name,
       configuration: [],
@@ -884,6 +882,14 @@ function deriveCapabilities(
   return [...packageCapabilities, ...exportedCapabilities].sort((left, right) =>
     left.packageName.localeCompare(right.packageName) || left.name.localeCompare(right.name),
   );
+}
+
+function resolveCapabilityFrameworks(packageRecord: PackageRecord): CapabilityRecord['frameworks'] {
+  if (packageRecord.framework) {
+    return [packageRecord.framework];
+  }
+
+  return ['react', 'vue', 'angular', 'svelte', 'vanilla'];
 }
 
 function appendToMap<TKey, TValue>(map: Map<TKey, TValue[]>, key: TKey, value: TValue): void {

@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import ts from 'typescript';
 
 import type {
+  Framework,
   PackageRecord,
   Product,
   SymbolKind,
@@ -20,6 +21,7 @@ type PackageDefinition = {
   entrypoint: string;
   product: Product;
   tier: Tier;
+  framework?: Framework;
 };
 
 export type PublicExport = {
@@ -32,6 +34,7 @@ export type PublicExport = {
   configurationKeys?: string[];
   methods?: string[];
   events?: string[];
+  deprecated?: boolean;
 };
 
 export type PublishedPackageCatalog = {
@@ -45,6 +48,10 @@ const execFileAsync = promisify(execFile);
 
 const DEFINITIONS: PackageDefinition[] = [
   { repository: 'revogrid', packageDirectory: '.', entrypoint: 'src/index.ts', product: 'core', tier: 'core' },
+  { repository: 'revogrid', packageDirectory: 'packages/react', entrypoint: 'lib/index.ts', product: 'core', tier: 'core', framework: 'react' },
+  { repository: 'revogrid', packageDirectory: 'packages/vue3', entrypoint: 'lib/index.ts', product: 'core', tier: 'core', framework: 'vue' },
+  { repository: 'revogrid', packageDirectory: 'packages/angular/projects/angular-datagrid', entrypoint: 'src/public-api.ts', product: 'core', tier: 'core', framework: 'angular' },
+  { repository: 'revogrid', packageDirectory: 'packages/svelte', entrypoint: 'lib/index.ts', product: 'core', tier: 'core', framework: 'svelte' },
   { repository: 'revogrid-pro', packageDirectory: 'packages/pro', entrypoint: 'index.ts', product: 'pro', tier: 'pro' },
   { repository: 'revogrid-pro', packageDirectory: 'packages/pivot', entrypoint: 'src/index.ts', product: 'pivot', tier: 'enterprise' },
   { repository: 'revogrid-pro', packageDirectory: 'packages/gantt', entrypoint: 'src/index.ts', product: 'gantt', tier: 'enterprise' },
@@ -95,6 +102,7 @@ export async function buildPublishedPackageCatalog(
       name: manifest.name,
       version: manifest.version,
       product: definition.product,
+      ...(definition.framework ? { framework: definition.framework } : {}),
       tier: definition.tier,
       requiresPro: definition.tier !== 'core',
       entrypoint: `${definition.repository}/${relativeEntrypoint}`,
@@ -181,12 +189,23 @@ async function collectExports(
           named.configurationKeys,
           named.methods,
           named.events,
+          named.deprecated,
         ));
       }
       if (ts.isVariableStatement(statement)) {
         for (const declaration of statement.declarationList.declarations) {
           if (ts.isIdentifier(declaration.name)) {
-            found.push(exportRecord(declaration.name.text, packageName, sourcePath, 'variable', compactSignature(declaration.getText(sourceFile))));
+            found.push(exportRecord(
+              declaration.name.text,
+              packageName,
+              sourcePath,
+              'variable',
+              compactSignature(declaration.getText(sourceFile)),
+              undefined,
+              undefined,
+              undefined,
+              isDeprecated(declaration),
+            ));
           }
         }
       }
@@ -204,6 +223,7 @@ function declarationName(node: ts.Statement): {
   configurationKeys?: string[];
   methods?: string[];
   events?: string[];
+  deprecated?: boolean;
 } | null {
   if (ts.isClassDeclaration(node) && node.name) return named(node, node.name.text, 'class');
   if (ts.isFunctionDeclaration(node) && node.name) return named(node, node.name.text, 'function');
@@ -235,8 +255,13 @@ function named(node: ts.Node, name: string, kind: SymbolKind) {
     ...(methods.length > 0 ? { methods } : {}),
     ...(propertyNames.some((value) => /(?:event|before|after|change)/i.test(value))
       ? { events: propertyNames.filter((value) => /(?:event|before|after|change)/i.test(value)) }
-      : {})
+      : {}),
+    ...(isDeprecated(node) ? { deprecated: true } : {})
   };
+}
+
+function isDeprecated(node: ts.Node): boolean {
+  return ts.getJSDocTags(node).some((tag) => tag.tagName.text === 'deprecated');
 }
 
 function hasExportModifier(node: ts.Node): boolean {
@@ -252,6 +277,7 @@ function exportRecord(
   configurationKeys?: string[],
   methods?: string[],
   events?: string[],
+  deprecated?: boolean,
 ): PublicExport {
   return {
     name,
@@ -262,7 +288,8 @@ function exportRecord(
     ...(signature ? { signature } : {}),
     ...(configurationKeys?.length ? { configurationKeys } : {}),
     ...(methods?.length ? { methods } : {}),
-    ...(events?.length ? { events } : {})
+    ...(events?.length ? { events } : {}),
+    ...(deprecated ? { deprecated: true } : {})
   };
 }
 

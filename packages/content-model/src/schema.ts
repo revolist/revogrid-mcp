@@ -70,6 +70,7 @@ export const PackageRecordSchema = z.object({
   name: z.string(),
   version: z.string(),
   product: ProductSchema,
+  framework: FrameworkSchema.optional(),
   tier: TierSchema,
   requiresPro: z.boolean(),
   entrypoint: z.string(),

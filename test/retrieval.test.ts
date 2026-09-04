@@ -137,6 +137,10 @@ describe('retrieval quality', () => {
 
     expect(packageNames).toEqual(expect.arrayContaining([
       '@revolist/revogrid',
+      '@revolist/react-datagrid',
+      '@revolist/vue3-datagrid',
+      '@revolist/angular-datagrid',
+      '@revolist/svelte-datagrid',
       '@revolist/revogrid-pro',
       '@revolist/pivot',
       '@revolist/gantt',
@@ -152,7 +156,16 @@ describe('retrieval quality', () => {
     expect(packages.find((item) => item.name === '@revolist/revogrid')?.exportEntrypoints).toEqual(
       expect.arrayContaining(['.', './loader', './standalone']),
     );
+    expect(packages.filter((item) => item.framework).map((item) => item.framework).sort()).toEqual(
+      ['angular', 'react', 'svelte', 'vue'],
+    );
+    const coreVersion = packages.find((item) => item.name === '@revolist/revogrid')?.version;
+    expect(packages.filter((item) => item.framework).every((item) => item.version === coreVersion)).toBe(true);
     expect(capabilities.find((item) => item.name === 'scheduler')?.requiresPro).toBe(true);
+    expect(capabilities.find((item) => item.id === '@revolist/pivot:pivotplugin')).toMatchObject({
+      stability: 'stable',
+      frameworks: expect.arrayContaining(['react', 'vue', 'angular', 'svelte', 'vanilla'])
+    });
     expect(() => validateCatalogDataset(dataset)).not.toThrow();
   });
 
