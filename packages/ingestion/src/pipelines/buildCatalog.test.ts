@@ -178,7 +178,12 @@ describe.sequential('buildCatalogDataset', () => {
       writeFixtureFile(
         revogridProRoot,
         'package.json',
-        JSON.stringify({ name: 'revogrid-pro', version: '1.5.20' }, null, 2),
+        JSON.stringify({ name: 'revogrid-pro-monorepo', private: true }, null, 2),
+      ),
+      writeFixtureFile(
+        revogridProRoot,
+        'packages/pro/package.json',
+        JSON.stringify({ name: '@revolist/revogrid-pro', version: '1.5.20' }, null, 2),
       ),
       writeFixtureFile(
         revogridProRoot,
@@ -340,6 +345,21 @@ describe.sequential('buildCatalogDataset', () => {
     expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/readme/README.md')).toBe(true);
     expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/packages/widget/README.md')).toBe(true);
     expect(dataset.chunks.some((chunk) => chunk.sourcePath === 'revogrid/src/test/internal-behavior.ts')).toBe(true);
+  });
+
+  it('uses the canonical Pro package version when the monorepo root is versionless', async () => {
+    const dataset = await buildCatalogDataset();
+
+    expect(
+      dataset.chunks
+        .filter((chunk) => chunk.sourcePath?.startsWith('revogrid-pro/'))
+        .every((chunk) => chunk.version === '1.5.20'),
+    ).toBe(true);
+    expect(dataset.versions).toContainEqual(expect.objectContaining({
+      version: '1.5.20',
+      latest: true
+    }));
+    expect(dataset.versions.some((version) => version.version === '0.0.0')).toBe(false);
   });
 
   it('includes feature artifact files and merges explicit feature matrix records', async () => {

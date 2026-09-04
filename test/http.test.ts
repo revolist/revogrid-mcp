@@ -144,6 +144,51 @@ describe('http integration', () => {
     });
   });
 
+  it.each(['/', '/pro'])('lists the bundled tools over %s', async (url) => {
+    const initializeResponse = await app.inject({
+      method: 'POST',
+      url,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
+      payload: initializePayload
+    });
+
+    expect(initializeResponse.statusCode).toBe(200);
+    expect(initializeResponse.headers['mcp-session-id']).toBeUndefined();
+
+    const response = await app.inject({
+      method: 'POST',
+      url,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': '2024-11-05'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: `tools-${url}`,
+        method: 'tools/list',
+        params: {}
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: `tools-${url}`,
+      result: {
+        tools: expect.arrayContaining([
+          expect.objectContaining({ name: 'search_revogrid_docs' }),
+          expect.objectContaining({ name: 'find_examples' }),
+          expect.objectContaining({ name: 'resolve_feature_matrix' }),
+          expect.objectContaining({ name: 'get_migration_notes' })
+        ])
+      }
+    });
+  });
+
   it('serves catalog resources from the unified endpoint', async () => {
     const response = await app.inject({
       method: 'POST',

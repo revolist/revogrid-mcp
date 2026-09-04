@@ -511,20 +511,41 @@ async function getPackageVersions(): Promise<PackageVersions> {
     resolveSourceRoot(import.meta.url, 'revogrid-pro')
   ]);
 
-  const [revogridPackageJson, revogridProPackageJson] = await Promise.all([
+  const [revogridPackageJson, revogridProPackageJson, revogridProPackage, revogridEnterprisePackage] = await Promise.all([
     readJsonFile<{ version?: string }>(path.join(revogridRoot.rootPath, 'package.json')),
-    readJsonFile<{ version?: string }>(path.join(revogridProRoot.rootPath, 'package.json'))
+    readJsonFile<{ version?: string }>(path.join(revogridProRoot.rootPath, 'package.json')),
+    readJsonFileIfPresent<{ version?: string }>(
+      path.join(revogridProRoot.rootPath, 'packages/pro/package.json'),
+    ),
+    readJsonFileIfPresent<{ version?: string }>(
+      path.join(revogridProRoot.rootPath, 'packages/enterprise/package.json'),
+    )
   ]);
 
   return {
     revogrid: revogridPackageJson.version ?? '0.0.0',
-    revogridPro: revogridProPackageJson.version ?? '0.0.0'
+    revogridPro:
+      revogridProPackageJson.version ??
+      revogridProPackage?.version ??
+      revogridEnterprisePackage?.version ??
+      '0.0.0'
   };
 }
 
 async function readJsonFile<TPayload extends object>(filePath: string): Promise<TPayload> {
   const contents = await readFile(filePath, 'utf8');
   return JSON.parse(contents) as TPayload;
+}
+
+async function readJsonFileIfPresent<TPayload extends object>(filePath: string): Promise<TPayload | null> {
+  try {
+    return await readJsonFile<TPayload>(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function deduplicateSources(sources: SourceFile[]): SourceFile[] {
